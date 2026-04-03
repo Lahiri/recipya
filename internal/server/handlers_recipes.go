@@ -800,16 +800,63 @@ func (s *Server) recipesEditPutHandler() http.HandlerFunc {
 			return
 		}
 
+		// Mark images and videos with the hidden "keep" inputs so that
+		// Keep markers are submitted as hidden fields while uploaded files come via multipart.
+		// We rebuild final order from the original recipe order and uploaded replacements
+		// because some browsers do not include empty file parts for untouched slots.
+		var (
+			keepImages []uuid.UUID
+			keepVideos []uuid.UUID
+			recipe     *models.Recipe
+		)
+		if r.FormValue("media-managed") == "1" {
+			recipe, err = s.Repository.Recipe(recipeNum, userID)
+			if err != nil {
+				msg := "Failed to retrieve recipe."
+				slog.Error(msg, userIDAttr, recipeNumAttr, "error", err)
+				s.Brokers.SendToast(models.NewErrorGeneralToast(msg), userID)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			for _, uuidStr := range r.Form["image-keep"] {
+				if parsed, err := uuid.Parse(uuidStr); err == nil {
+					keepImages = append(keepImages, parsed)
+				}
+			}
+			for _, uuidStr := range r.Form["video-keep"] {
+				if parsed, err := uuid.Parse(uuidStr); err == nil {
+					keepVideos = append(keepVideos, parsed)
+				}
+			}
+
+			updatedRecipe.Images = make([]uuid.UUID, 0, len(keepImages))
+			updatedRecipe.Videos = make([]models.VideoObject, 0, len(keepVideos))
+		}
+
+		uploadedImages := make([]uuid.UUID, 0)
+		uploadedVideos := make([]uuid.UUID, 0)
+
 		mediaFiles, ok := r.MultipartForm.File["images"]
 		if ok {
-			var (
-				newImages []*multipart.FileHeader
-				newVideos []*multipart.FileHeader
-			)
-
 			for _, fh := range mediaFiles {
 				mimeType := fh.Header.Get("Content-Type")
-				if strings.HasPrefix(mimeType, "image") {
+				isImage := strings.HasPrefix(mimeType, "image")
+				isVideo := strings.HasPrefix(mimeType, "video")
+				if !isImage && !isVideo {
+					switch strings.ToLower(filepath.Ext(fh.Filename)) {
+					case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heif", ".heic", ".tif", ".tiff":
+						isImage = true
+					case ".webm", ".mp4", ".mov", ".mkv", ".avi", ".ogv":
+						isVideo = true
+					}
+				}
+
+				if fh.Filename == "" {
+					continue
+				}
+
+				if isImage {
 					_, err = os.Stat(filepath.Join(app.ImagesDir, fh.Filename+app.ImageExt))
 					if err == nil {
 						parsed, err := uuid.Parse(fh.Filename)
@@ -817,54 +864,53 @@ func (s *Server) recipesEditPutHandler() http.HandlerFunc {
 							slog.Error("Could not parse image file name as UUID", "name", fh.Filename, "error", err)
 							continue
 						}
-						updatedRecipe.Images = append(updatedRecipe.Images, parsed)
-					} else {
-						newImages = append(newImages, fh)
+						uploadedImages = append(uploadedImages, parsed)
+						continue
 					}
-				} else {
-					_, err = os.Stat(filepath.Join(app.VideosDir, fh.Filename+app.VideoExt))
-					if err == nil {
-						parsed, err := uuid.Parse(fh.Filename)
-						if err != nil {
-							slog.Error("Could not parse video file name as UUID", "name", fh.Filename, "error", err)
-							continue
-						}
-						updatedRecipe.Videos = append(updatedRecipe.Videos, models.VideoObject{ID: parsed})
-					} else {
-						newVideos = append(newVideos, fh)
+
+					file, err := fh.Open()
+					if err != nil {
+						msg := "Could not open the image from the form."
+						slog.Error(msg, userIDAttr, recipeNumAttr, "error", err)
+						s.Brokers.SendToast(models.NewErrorGeneralToast(msg), userID)
+						w.WriteHeader(http.StatusBadRequest)
+						return
 					}
-				}
-			}
 
-			for _, imageFile := range newImages {
-				file, err := imageFile.Open()
-				if err != nil {
-					msg := "Could not open the image from the form."
-					slog.Error(msg, userIDAttr, recipeNumAttr, "error", err)
-					s.Brokers.SendToast(models.NewErrorGeneralToast(msg), userID)
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
+					u, err := s.Files.UploadImage(file)
+					if err != nil {
+						_ = file.Close()
+						msg := "Error uploading image."
+						slog.Error(msg, userIDAttr, "error", err)
+						s.Brokers.SendToast(models.NewErrorGeneralToast(msg), userID)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
 
-				u, err := s.Files.UploadImage(file)
-				if err != nil {
 					_ = file.Close()
-					msg := "Error uploading image."
-					slog.Error(msg, userIDAttr, "error", err)
-					s.Brokers.SendToast(models.NewErrorGeneralToast(msg), userID)
-					w.WriteHeader(http.StatusBadRequest)
-					return
+
+					if u != uuid.Nil {
+						uploadedImages = append(uploadedImages, u)
+					}
+					continue
 				}
 
-				_ = file.Close()
-
-				if u != uuid.Nil {
-					updatedRecipe.Images = append(updatedRecipe.Images, u)
+				if !isVideo {
+					continue
 				}
-			}
 
-			for _, videoFile := range newVideos {
-				file, err := videoFile.Open()
+				_, err = os.Stat(filepath.Join(app.VideosDir, fh.Filename+app.VideoExt))
+				if err == nil {
+					parsed, err := uuid.Parse(fh.Filename)
+					if err != nil {
+						slog.Error("Could not parse video file name as UUID", "name", fh.Filename, "error", err)
+						continue
+					}
+					uploadedVideos = append(uploadedVideos, parsed)
+					continue
+				}
+
+				file, err := fh.Open()
 				if err != nil {
 					msg := "Could not open the image from the form."
 					slog.Error(msg, userIDAttr, recipeNumAttr, "error", err)
@@ -886,8 +932,55 @@ func (s *Server) recipesEditPutHandler() http.HandlerFunc {
 				_ = file.Close()
 
 				if u != uuid.Nil {
-					updatedRecipe.Videos = append(updatedRecipe.Videos, models.VideoObject{ID: u})
+					uploadedVideos = append(uploadedVideos, u)
 				}
+			}
+		}
+
+		if r.FormValue("media-managed") == "1" && recipe != nil {
+			keepImageSet := make(map[uuid.UUID]struct{}, len(keepImages))
+			for _, id := range keepImages {
+				keepImageSet[id] = struct{}{}
+			}
+			imageUploadIdx := 0
+			for _, old := range recipe.Images {
+				if _, ok := keepImageSet[old]; ok {
+					updatedRecipe.Images = append(updatedRecipe.Images, old)
+					continue
+				}
+				if imageUploadIdx < len(uploadedImages) {
+					updatedRecipe.Images = append(updatedRecipe.Images, uploadedImages[imageUploadIdx])
+					imageUploadIdx++
+				}
+			}
+			for ; imageUploadIdx < len(uploadedImages); imageUploadIdx++ {
+				updatedRecipe.Images = append(updatedRecipe.Images, uploadedImages[imageUploadIdx])
+			}
+
+			keepVideoSet := make(map[uuid.UUID]struct{}, len(keepVideos))
+			for _, id := range keepVideos {
+				keepVideoSet[id] = struct{}{}
+			}
+			videoUploadIdx := 0
+			for _, old := range recipe.Videos {
+				if _, ok := keepVideoSet[old.ID]; ok {
+					updatedRecipe.Videos = append(updatedRecipe.Videos, old)
+					continue
+				}
+				if videoUploadIdx < len(uploadedVideos) {
+					updatedRecipe.Videos = append(updatedRecipe.Videos, models.VideoObject{ID: uploadedVideos[videoUploadIdx]})
+					videoUploadIdx++
+				}
+			}
+			for ; videoUploadIdx < len(uploadedVideos); videoUploadIdx++ {
+				updatedRecipe.Videos = append(updatedRecipe.Videos, models.VideoObject{ID: uploadedVideos[videoUploadIdx]})
+			}
+		} else {
+			for _, id := range uploadedImages {
+				updatedRecipe.Images = append(updatedRecipe.Images, id)
+			}
+			for _, id := range uploadedVideos {
+				updatedRecipe.Videos = append(updatedRecipe.Videos, models.VideoObject{ID: id})
 			}
 		}
 

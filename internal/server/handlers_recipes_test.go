@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -739,7 +741,7 @@ func TestHandlers_Recipes_Edit(t *testing.T) {
 		assertStringsInHTML(t, getBodyHTML(rr), []string{
 			`<title hx-swap-oob="true">Edit Chicken Jersey | Recipya</title>`,
 			`<input required type="text" name="title" placeholder="Title of the recipe*" autocomplete="off" class="input w-full btn-ghost text-center" value="Chicken Jersey">`,
-			`<div id="media-container" class="grid grid-flow-col grid-cols-7 w-full text-center border-gray-700 md:grid-cols-6 md:col-span-3 md:border-r"><div class="buttons-container flex flex-col gap-1 col-span-2 md:col-span-1 p-1"><button id="media-button-1" type="button" class="btn btn-sm btn-ghost btn-active" onclick="switchMedia(event)">Media 1</button> <button id="add-media-button" type="button" class="btn btn-sm btn-ghost" onclick="addMedia(event)"><svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 hover:text-red-600" fill="none" viewBox="0 0 24 24" width="24px" height="24px" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle> <line x1="12" y1="8" x2="12" y2="16"></line> <line x1="8" y1="12" x2="16" y2="12"></line></svg>Add</button></div><div id="media" class="col-span-5"><label id="media-1" class=""><img alt="" class="object-cover mb-2 w-full max-h-[39rem]" src=""> <span class="grid gap-1 max-w-sm" style="margin: auto auto 0.25rem;"><div class="mr-1 hidden"><input type="file" accept="image/*,video/*" name="images" class="file-input file-input-sm file-input-bordered w-full max-w-sm" value="/data/images/` + baseRecipe.Images[0].String() + `.webp" _="on dragover or dragenter halt the event then set the target's style.background to 'lightgray' on dragleave or drop set the target's style.background to '' on drop or change make an FileReader called reader then if event.dataTransfer get event.dataTransfer.files[0] else get event.target.files[0] end then if it.type.startsWith('video')`,
+			`<div id="media-container" class="grid grid-flow-col grid-cols-7 w-full text-center border-gray-700 md:grid-cols-6 md:col-span-3 md:border-r"><div class="buttons-container flex flex-col gap-1 col-span-2 md:col-span-1 p-1"><input type="hidden" name="media-managed" value="1"> <button id="media-button-1" type="button" class="btn btn-sm btn-ghost btn-active" onclick="switchMedia(event)">Media 1</button> <button id="add-media-button" type="button" class="btn btn-sm btn-ghost" onclick="addMedia(event)"><svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 hover:text-red-600" fill="none" viewBox="0 0 24 24" width="24px" height="24px" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle> <line x1="12" y1="8" x2="12" y2="16"></line> <line x1="8" y1="12" x2="16" y2="12"></line></svg>Add</button></div><div id="media" class="col-span-5"><label id="media-1" class=""><img alt="" class="object-cover mb-2 w-full max-h-[39rem]" src=""> <span class="grid gap-1 max-w-sm" style="margin: auto auto 0.25rem;"><input type="hidden" name="image-keep" value="` + baseRecipe.Images[0].String() + `"><div class="mr-1 hidden"><input type="file" accept="image/*,video/*" name="images" class="file-input file-input-sm file-input-bordered w-full max-w-sm" value="/data/images/` + baseRecipe.Images[0].String() + `.webp" _="on dragover or dragenter halt the event then set the target's style.background to 'lightgray' on dragleave or drop set the target's style.background to '' on drop or change make an FileReader called reader then if event.dataTransfer get event.dataTransfer.files[0] else get event.target.files[0] end then if it.type.startsWith('video')`,
 			`after previous <img/> then add .hidden to previous <img/> else set {src: window.URL.createObjectURL(it)} on previous <img/> end then remove .hidden from me.parentElement.parentElement.querySelectorAll('button') then add .hidden to the parentElement of me"><div class="divider">OR</div><span class="hidden input-error"></span><div class="flex"><input type="url" placeholder="Enter the URL of an image" class="input input-bordered input-sm w-full max-w-sm mr-1"> <button type="button" class="btn btn-sm" hx-get="/fetch" hx-vals="js:{url: event.target.previousElementSibling.value}" hx-swap="none" _="on htmx:afterRequest if event.detail.successful then set a to first in event.target.parentElement.parentElement.children then call updateMediaFromFetch(a, event.detail.xhr.responseURL) end">Fetch</button></div><div _="on load if not navigator.clipboard hide me"><div class="divider">OR</div><button type="button" class="btn btn-sm" onclick="pasteImage(event)">Paste copied image</button></div></div><button type="button" class="btn btn-sm btn-error btn-outline hidden" onclick="deleteMedia(event)">Delete</button></span></label> </div>`,
 			`<input type="text" list="categories" name="category" class="input input-bordered input-sm w-48 md:w-36 lg:w-48" placeholder="Breakfast" autocomplete="off" value="american"> <datalist id="categories"><option>breakfast</option><option>lunch</option><option>dinner</option></datalist>`,
 			`<input type="number" min="1" name="yield" class="input input-bordered input-sm w-24 md:w-20 lg:w-24" value="12">`,
@@ -784,11 +786,54 @@ func TestHandlers_Recipes_Edit(t *testing.T) {
 		got, _ := srv.Repository.Recipe(baseRecipe.ID, 1)
 		isImagesEqual := slices.Equal(got.Images, baseRecipe.Images)
 		isVideosEqual := slices.Equal(got.Videos, baseRecipe.Videos)
-		if (isImagesEqual && !isVideosEqual) || (!isImagesEqual && isVideosEqual) {
-			t.Fatal("image should have been updated")
+		if isImagesEqual || !isVideosEqual {
+			t.Fatal("image should have been updated while videos stay unchanged")
 		}
 		if files.uploadImageHitCount == 0 {
 			t.Fatal("must have uploaded image")
+		}
+	})
+
+	t.Run("replaced image keeps order", func(t *testing.T) {
+		firstID := uuid.New()
+		secondID := uuid.New()
+		replacementID := uuid.New()
+
+		recipe := baseRecipe
+		recipe.Images = []uuid.UUID{firstID, secondID}
+
+		files := &mockFiles{
+			uploadImageFunc: func(_ io.ReadCloser) (uuid.UUID, error) {
+				return replacementID, nil
+			},
+		}
+		srv.Files = files
+		srv.Repository = &mockRepository{RecipesRegistered: map[int64]models.Recipes{1: {recipe}}}
+
+		var form bytes.Buffer
+		writer := multipart.NewWriter(&form)
+		_ = writer.WriteField("media-managed", "1")
+		_ = writer.WriteField("image-keep", firstID.String())
+
+		emptySlotHeader := make(textproto.MIMEHeader)
+		emptySlotHeader.Set("Content-Disposition", `form-data; name="images"; filename=""`)
+		emptySlotHeader.Set("Content-Type", "image/webp")
+		emptySlotPart, _ := writer.CreatePart(emptySlotHeader)
+		_, _ = emptySlotPart.Write([]byte{})
+
+		replacedSlotPart, _ := writer.CreateFormFile("images", "replace.jpg")
+		_, _ = replacedSlotPart.Write([]byte("not a real file"))
+		_ = writer.Close()
+
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPut, fmt.Sprintf(uri, 1), header(writer.FormDataContentType()), strings.NewReader(form.String()))
+
+		assertStatus(t, rr.Code, http.StatusNoContent)
+		got, _ := srv.Repository.Recipe(recipe.ID, 1)
+		if len(got.Images) != 2 {
+			t.Fatalf("got %d images; want 2", len(got.Images))
+		}
+		if got.Images[0] != firstID || got.Images[1] != replacementID {
+			t.Fatalf("got image order %v; want [%s %s]", got.Images, firstID, replacementID)
 		}
 	})
 

@@ -235,6 +235,9 @@ const SelectDistinctImages = `
 	FROM recipes
 	UNION
 	SELECT DISTINCT image
+	FROM additional_images_recipe
+	UNION
+	SELECT DISTINCT image
 	FROM cookbooks`
 
 // SelectDistinctVideos gets all distinct video UUIDs from the recipes table.

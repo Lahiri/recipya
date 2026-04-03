@@ -2058,42 +2058,48 @@ func (s *SQLiteService) UpdateRecipe(updatedRecipe *models.Recipe, userID int64,
 	userIDAttr := slog.Int64("userID", userID)
 	recipeIDAttr := slog.Int64("recipeID", recipeID)
 
-	_, err = tx.ExecContext(ctx, statements.DeleteRecipeImages, recipeID, userID)
-	if err != nil {
-		slog.Error("Failed to delete images.", userIDAttr, recipeIDAttr, "error", err)
-		return err
-	}
+	// Only update media when the caller explicitly provides it.
+	// A nil slice means "no media changes", while a non-nil empty slice means "clear media".
+	if updatedRecipe.Images != nil {
+		_, err = tx.ExecContext(ctx, statements.DeleteRecipeImages, recipeID, userID)
+		if err != nil {
+			slog.Error("Failed to delete images.", userIDAttr, recipeIDAttr, "error", err)
+			return err
+		}
 
-	if len(updatedRecipe.Images) > 0 {
-		updateFields["image"] = updatedRecipe.Images[0].String()
+		if len(updatedRecipe.Images) > 0 {
+			updateFields["image"] = updatedRecipe.Images[0].String()
 
-		if len(updatedRecipe.Images) > 1 {
-			for _, u := range updatedRecipe.Images[1:] {
-				_, err = tx.ExecContext(ctx, statements.InsertRecipeImage, recipeID, u)
-				if err != nil {
-					slog.Warn("Error inserting recipe image", userIDAttr, recipeIDAttr, "image", u, "err", err)
-					continue
+			if len(updatedRecipe.Images) > 1 {
+				for _, u := range updatedRecipe.Images[1:] {
+					_, err = tx.ExecContext(ctx, statements.InsertRecipeImage, recipeID, u)
+					if err != nil {
+						slog.Warn("Error inserting recipe image", userIDAttr, recipeIDAttr, "image", u, "err", err)
+						continue
+					}
 				}
 			}
-		}
-	} else {
-		_, err = tx.ExecContext(ctx, statements.UpdateRecipeImage, recipeID)
-		if err != nil {
-			slog.Warn("Error deleting images", userIDAttr, recipeIDAttr, "err", err)
+		} else {
+			_, err = tx.ExecContext(ctx, statements.UpdateRecipeImage, recipeID)
+			if err != nil {
+				slog.Warn("Error deleting images", userIDAttr, recipeIDAttr, "err", err)
+			}
 		}
 	}
 
-	_, err = tx.ExecContext(ctx, statements.DeleteRecipeVideos, recipeID, userID)
-	if err != nil {
-		slog.Error("Failed to delete user-uploaded videos.", userIDAttr, recipeIDAttr, "error", err)
-		return err
-	}
-
-	for _, v := range updatedRecipe.Videos {
-		_, err = tx.ExecContext(ctx, statements.InsertVideoRecipe, v.ID, recipeID, "", "")
+	if updatedRecipe.Videos != nil {
+		_, err = tx.ExecContext(ctx, statements.DeleteRecipeVideos, recipeID, userID)
 		if err != nil {
-			slog.Warn("Error inserting recipe image", userIDAttr, recipeIDAttr, "video", v, "err", err)
-			continue
+			slog.Error("Failed to delete user-uploaded videos.", userIDAttr, recipeIDAttr, "error", err)
+			return err
+		}
+
+		for _, v := range updatedRecipe.Videos {
+			_, err = tx.ExecContext(ctx, statements.InsertVideoRecipe, v.ID, recipeID, "", "")
+			if err != nil {
+				slog.Warn("Error inserting recipe image", userIDAttr, recipeIDAttr, "video", v, "err", err)
+				continue
+			}
 		}
 	}
 

@@ -922,10 +922,43 @@ templ loadRecipesManualScripts() {
                 });
             });
 
+		function markMediaAsReplaced(fileInput) {
+			const label = fileInput.closest("label");
+			if (!label) {
+				return;
+			}
+
+			const keepInput = label.querySelector('input[name="image-keep"], input[name="video-keep"]');
+			if (keepInput) {
+				keepInput.disabled = true;
+			}
+
+			// Keep file state authoritative to avoid stale attribute-based checks.
+			fileInput.removeAttribute("value");
+		}
+
+		document.addEventListener("change", (event) => {
+			const input = event.target.closest('input[type="file"][name="images"]');
+			if (input) {
+				markMediaAsReplaced(input);
+			}
+		});
+
+		document.addEventListener("drop", (event) => {
+			const input = event.target.closest('input[type="file"][name="images"]');
+			if (input) {
+				markMediaAsReplaced(input);
+			}
+		});
+
         function addMedia(event) {
             let media = document.querySelectorAll("#media label");
             for (let i = 0; i < media.length; i++) {
-                if (media[i].querySelector('input[type="file"]').files.length === 0) {
+                // do not show an alert if the media has already been upload and therefore the value set
+                const fileInput = media[i].querySelector('input[type="file"]');
+                const keepInput = media[i].querySelector('input[name="image-keep"], input[name="video-keep"]');
+                const hasKeptMedia = keepInput && !keepInput.disabled;
+                if (fileInput.files.length === 0 && !hasKeptMedia) {
                     alert(`Please select an image or video for 'Media ${i+1}'`);
                     return;
                 }
@@ -936,7 +969,11 @@ templ loadRecipesManualScripts() {
 
             const cloneMedia = media[media.length-1].cloneNode(true);
             media.forEach(label => label.classList.add("hidden"));
-            cloneMedia.querySelector("input").value = '';
+            cloneMedia.querySelectorAll('input[name="image-keep"], input[name="video-keep"]').forEach(el => el.remove());
+            const clonedFileInput = cloneMedia.querySelector('input[type="file"]');
+            clonedFileInput.value = '';
+            clonedFileInput.files = (new DataTransfer()).files;
+            clonedFileInput.removeAttribute("value");
             cloneMedia.id = `media-${media.length+1}`;
 
             let n = cloneMedia.querySelector("img");
@@ -995,6 +1032,10 @@ templ loadRecipesManualScripts() {
             span.querySelector("input[type=file]").value = null;
             span.querySelector("input[type=file]").files = (new DataTransfer()).files;
             span.children[0].classList.remove("hidden");
+            const keepInput = parent.querySelector('input[name="image-keep"], input[name="video-keep"]');
+            if (keepInput) {
+              keepInput.disabled = true;
+            }
             event.target.classList.add("hidden");
         }
 
@@ -1177,6 +1218,7 @@ templ editRecipe(data *templates.ViewRecipeData) {
 						<div class="grid md:grid-flow-col md:grid-cols-6">
 							<div id="media-container" class="grid grid-flow-col grid-cols-7 w-full text-center border-gray-700 md:grid-cols-6 md:col-span-3 md:border-r">
 								<div class="buttons-container flex flex-col gap-1 col-span-2 md:col-span-1 p-1">
+									<input type="hidden" name="media-managed" value="1"/>
 									if len(data.Recipe.Images) == 0 && len(data.Recipe.Videos) == 0 {
 										<button
 											id="media-button-1"
@@ -1279,6 +1321,7 @@ templ editRecipe(data *templates.ViewRecipeData) {
 													}
 												/>
 												<span class="grid gap-1 max-w-sm" style="margin: auto auto 0.25rem;">
+													<input type="hidden" name="image-keep" value={ image.String() }/>
 													<div class="mr-1 hidden">
 														<input
 															type="file"
@@ -1345,6 +1388,7 @@ templ editRecipe(data *templates.ViewRecipeData) {
 													<video controls class="mb-2" src={ "/data/videos/" + v.ID.String() + ".webm" } type="video/webm"></video>
 												}
 												<span class="grid gap-1 max-w-sm" style="margin: auto auto 0.25rem;">
+													<input type="hidden" name="video-keep" value={ v.ID.String() }/>
 													<div class={ "mr-1", templ.KV("hidden", i >= 0) }>
 														<input
 															type="file"
