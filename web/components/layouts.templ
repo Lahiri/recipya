@@ -171,9 +171,9 @@ templ layoutMain(title string, data templates.Data) {
 				</div>
 			</header>
 			<div id="fullscreen-loader" class="htmx-indicator"></div>
-			<main class="inline-flex w-full">
+			<main class="inline-flex w-full print:block">
 				if data.IsAuthenticated {
-					<aside id="desktop_nav" class="hidden md:block">
+					<aside id="desktop_nav" class="hidden md:block print:hidden">
 						<ul class="menu menu-sm bg-base-300 rounded-box h-full" style="border-radius: 0">
 							<li id="recipes_sidebar_recipes" hx-get="/recipes" hx-target="#content" hx-trigger="mousedown" hx-push-url="true" hx-swap-oob="true" hx-swap="innerHTML transition:true">
 								<a class="tooltip tooltip-right active" data-tip="Recipes">
@@ -195,12 +195,12 @@ templ layoutMain(title string, data templates.Data) {
 							</li>
 						</ul>
 					</aside>
-					<aside id="mobile_nav" class="btm-nav btm-nav-sm md:hidden z-20">
+					<aside id="mobile_nav" class="btm-nav btm-nav-sm md:hidden z-20 print:hidden">
 						<button hx-get="/recipes" hx-target="#content" hx-push-url="true" hx-swap-oob="true" hx-swap="innerHTML transition:true">Recipes</button>
 						<button hx-get="/cookbooks" hx-target="#content" hx-push-url="true" hx-swap-oob="true" hx-swap="innerHTML transition:true">Cookbooks</button>
 					</aside>
 				}
-				<div id="content" class="min-h-[92.5vh] w-full">
+				<div id="content" class="min-h-[92.5vh] w-full print:min-h-0">
 					{ children... }
 				</div>
 			</main>

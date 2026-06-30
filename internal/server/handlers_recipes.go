@@ -1107,6 +1107,7 @@ func (s *Server) recipeScaleHandler() http.HandlerFunc {
 		recipe.Scale(int16(yield))
 
 		_ = components.IngredientsInstructions(&templates.ViewRecipeData{Recipe: recipe}).Render(r.Context(), w)
+		_, _ = fmt.Fprintf(w, `<div id="print-yield" class="hidden print:grid print:place-items-center print:gap-1 print:text-center" hx-swap-oob="outerHTML:#print-yield"><div class="hidden print:block print:h-6">&nbsp;</div><div class="font-semibold">%d</div><div class="text-xs uppercase tracking-wide">Servings</div></div>`, recipe.Yield)
 	}
 }
 

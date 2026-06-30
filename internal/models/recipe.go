@@ -236,13 +236,29 @@ func (r *Recipe) Scale(yield int16) {
 				scaledIngredients[i] = units.ReplaceDecimalFractions(scaled)
 			case units.InvalidSystem:
 				if regex.BeginsWithWord.MatchString(ing) {
+					isScaled := false
 					ing = regex.BeginsWithWord.ReplaceAllStringFunc(ing, func(s string) string {
 						f := wordConverter.Words2Number(s) * multiplier
 						if f > 0 {
+							isScaled = true
 							return strconv.FormatFloat(f, 'g', 2, 64) + " "
 						}
 						return s
 					})
+					if !isScaled {
+						if regex.Unit.MatchString(ing) {
+							ing = regex.Unit.ReplaceAllStringFunc(ing, func(s string) string {
+								m, err := units.NewMeasurementFromString(s)
+								if err != nil {
+									return s
+								}
+								return m.Scale(multiplier).String()
+							})
+						} else {
+							ing = extensions.ScaleString(ing, multiplier)
+						}
+						ing = units.ReplaceDecimalFractions(ing)
+					}
 				} else {
 					ing = extensions.ScaleString(ing, multiplier)
 					ing = units.ReplaceDecimalFractions(ing)

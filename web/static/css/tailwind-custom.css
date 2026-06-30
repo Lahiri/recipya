@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@media print {
+    .recipe-print,
+    .recipe-print * {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .recipe-print-bg-muted {
+        background-color: #f3f4f6 !important;
+    }
+
+    .recipe-print-bg-ingredients {
+        background-color: #F7DFC2 !important;
+    }
+}
+
 @layer components {
     .link {
         @apply underline text-blue-600 hover:text-blue-600 visited:text-purple-600 dark:hover:text-blue-300 dark:visited:text-purple-300 dark:text-blue-400

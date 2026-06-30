@@ -907,6 +907,11 @@ func TestRecipe_Scale(t *testing.T) {
 			"Two 15-ounce can Goya beans",
 			"1 c. soupe bovril boeuf",
 			"150-350g Asian chives (buchu), Chopped",
+			"Spaghetti grossi 320 g",
+			"Aglio 3 spicchi",
+			"Peperoncino fresco 1",
+			"Prezzemolo q.b.",
+			"Olio extravergine d'oliva 70 g",
 		},
 		Instructions: nil,
 		Name:         "Sauce",
@@ -931,10 +936,15 @@ func TestRecipe_Scale(t *testing.T) {
 			"6 Large or 8 medium ripe Hass avocados",
 			"1/2 tsp salt plus more for seasoning",
 			"1 fresh pineapple, cored and cut into 3-inch pieces",
-			"Un sac de chips de 1kg",
+			"Un sac de chips de 2 kg",
 			"4 15-ounce can Goya beans",
 			"2 cups. soupe bovril boeuf",
 			"300 g Asian chives (buchu), Chopped",
+			"Spaghetti grossi 640 g",
+			"Aglio 6 spicchi",
+			"Peperoncino fresco 2",
+			"Prezzemolo q.b.",
+			"Olio extravergine d'oliva 140 g",
 		}
 		want.Yield = 8
 		assertStructsEqual(t, got, want)
@@ -958,10 +968,15 @@ func TestRecipe_Scale(t *testing.T) {
 			"3/4 Large or 1 medium ripe Hass avocados",
 			"0.06 tsp salt plus more for seasoning",
 			"1/8 fresh pineapple, cored and cut into 3/8-inch pieces",
-			"Un sac de chips de 1kg",
+			"Un sac de chips de 250 g",
 			"0.5 15-ounce can Goya beans",
 			"4 tbsp. soupe bovril boeuf",
 			"37 1/2 g Asian chives (buchu), Chopped",
+			"Spaghetti grossi 80 g",
+			"Aglio 3/4 spicchi",
+			"Peperoncino fresco 1/4",
+			"Prezzemolo q.b.",
+			"Olio extravergine d'oliva 17 1/2 g",
 		}
 		want.Yield = 1
 		assertStructsEqual(t, got, want)

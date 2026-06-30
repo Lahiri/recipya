@@ -1999,7 +1999,7 @@ templ ViewRecipe(data templates.Data) {
 
 templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 	if !data.Share.IsShared {
-		<dialog id="share_dialog" class="modal">
+		<dialog id="share_dialog" class="modal print:hidden">
 			<div class="modal-box w-4/5 sm:w-96">
 				<div id="share-dialog-result"></div>
 				<div class="modal-action block mt-4">
@@ -2010,12 +2010,12 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 			</div>
 		</dialog>
 	}
-	<section class="p-2">
-		<div class="flex justify-center">
-			<div class="card card-bordered bg-base-100 shadow-none w-full border-gray-700 xl:w-[72rem] print:rounded-none">
-				<div class="card-body" style="padding: 0">
+	<section class="p-2 print:p-0 recipe-print">
+		<div class="flex justify-center print:block">
+			<div class="card card-bordered bg-base-100 shadow-none w-full border-gray-700 xl:w-[72rem] print:block print:rounded-none print:border-0 print:bg-white print:text-black">
+				<div class="card-body print:flex print:flex-col print:gap-1 print:bg-white" style="padding: 0">
 					<h2
-						class="card-title bg-base-200 px-2 pt-2 place-content-center rounded-t-2xl print:border-b print:border-black"
+						class="card-title bg-base-200 px-2 pt-2 place-content-center rounded-t-2xl print:block print:bg-white print:rounded-none print:border-y print:border-black print:mx-8 print:my-1 print:px-0 print:py-2"
 						style="justify-content: space-between"
 					>
 						<span class="grid grid-flow-col place-items-center pb-2 print:hidden">
@@ -2045,7 +2045,7 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 								</button>
 							}
 						</span>
-						<span class="text-center pb-2 print:w-full" itemprop="name">{ data.Recipe.Name }</span>
+						<span class="text-center pb-2 print:block print:w-full print:pb-0 print:text-center print:text-3xl print:font-normal print:leading-tight print:uppercase" itemprop="name">{ data.Recipe.Name }</span>
 						<span class="md:hidden">
 							<button
 								title="Open recipe options menu"
@@ -2180,7 +2180,17 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 							}
 						</span>
 					</h2>
-					<div class="grid md:grid-flow-col md:grid-cols-6">
+					if len(data.Recipe.Images) > 0 && data.IsImagesExist[0] {
+						<div class="hidden print:flex print:justify-center print:mt-0 print:mb-1 print:break-inside-avoid">
+							<img
+								style="object-fit: cover"
+								alt="Image of the recipe"
+								class="print:h-64 print:w-full print:max-w-full"
+								src={ "/data/images/" + data.Recipe.Images[0].String() + app.ImageExt }
+							/>
+						</div>
+					}
+					<div class="grid md:grid-flow-col md:grid-cols-6 print:block print:px-8">
 						<div class="w-[95vw] md:w-full text-center border-b border-gray-700 md:col-span-3 md:border-r md:border-b-0 flex items-center justify-center print:hidden">
 							switch len(data.Recipe.Images) + len(data.Recipe.Videos) {
 								case 0:
@@ -2279,8 +2289,8 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 									</div>
 							}
 						</div>
-						<div class="grid grid-cols-3 col-span-3 md:grid-flow-row md:grid-rows-4 print:grid-rows-2" style="grid-template-rows: auto">
-							<div class="grid grid-flow-col col-span-6 md:row-span-1 md:border-y md:border-gray-700 print:row-span-1 print:grid-cols-2 print:border-b-black print:border">
+						<div class="grid grid-cols-3 col-span-3 md:grid-flow-row md:grid-rows-4 print:block" style="grid-template-rows: auto">
+							<div class="grid grid-flow-col col-span-6 md:row-span-1 md:border-y md:border-gray-700 print:hidden">
 								<div class="col-span-2 grid place-items-center md:col-span-1 print:col-span-1 print:float-left print:ml-2 print:border-r print:border-black">
 									<div class="badge badge-primary badge-outline">{ data.Recipe.Category }</div>
 								</div>
@@ -2305,6 +2315,7 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 													hx-get={ fmt.Sprintf("/recipes/%d/scale", data.ID) }
 													hx-trigger="input"
 													hx-target="#ingredients-instructions-container"
+													hx-swap="outerHTML"
 												/>
 											</label>
 										</form>
@@ -2312,7 +2323,6 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 										<p class="text-sm text-center">{ fmt.Sprint(data.Recipe.Yield) } servings</p>
 									}
 								</div>
-								<p class="hidden p-0 pt-2 print:grid print:text-center print:place-content-center">{ fmt.Sprint(data.Recipe.Yield) } servings</p>
 								<div class="flex items-center justify-center col-span-2 text-sm md:col-span-1 print:hidden">
 									if data.IsURL {
 										<a
@@ -2335,8 +2345,31 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 									}
 								</div>
 							</div>
+							<div class="recipe-print-bg-muted hidden print:grid print:grid-cols-5 print:items-center print:gap-2 print:bg-gray-100 print:px-2 print:py-2 print:my-0 print:rounded-md print:text-center print:text-base">
+								<div class="grid print:place-items-center print:gap-1">
+									<div class="hidden print:block print:h-6">&nbsp;</div>
+									<div class="font-semibold">{ data.Recipe.Category }</div>
+									<div class="text-xs uppercase tracking-wide">Dish type</div>
+								</div>
+								@PrintYield(data.Recipe.Yield, false)
+								<div class="grid print:place-items-center print:gap-1 print:pt-2">
+									@iconCuttingBoard()
+									<time class="font-semibold" datetime={ data.FormattedTimes.PrepDateTime }>{ data.FormattedTimes.Prep }</time>
+									<div class="text-xs uppercase tracking-wide">Prep time</div>
+								</div>
+								<div class="grid print:place-items-center print:gap-1">
+									@iconCookingPot()
+									<time class="font-semibold" datetime={ data.FormattedTimes.CookDateTime }>{ data.FormattedTimes.Cook }</time>
+									<div class="text-xs uppercase tracking-wide">Cooking time</div>
+								</div>
+								<div class="grid print:place-items-center print:gap-1">
+									@iconClock()
+									<time class="font-semibold" datetime={ data.FormattedTimes.TotalDateTime }>{ data.FormattedTimes.Total }</time>
+									<div class="text-xs uppercase tracking-wide">Total time</div>
+								</div>
+							</div>
 							if len(data.Recipe.Keywords) > 0 {
-								<div class="border-gray-700 border-y col-span-6 md:border-t-0 md:grid-cols-3 print:border-none">
+								<div class="border-gray-700 border-y col-span-6 md:border-t-0 md:grid-cols-3 print:hidden">
 									<div class="p-4">
 										for _, kw := range data.Recipe.Keywords {
 											<div class="badge badge-sm badge-neutral m-1 flex-auto">{ kw }</div>
@@ -2344,7 +2377,7 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 									</div>
 								</div>
 							}
-							<div class={ "grid grid-flow-col border-gray-700 col-span-6 py-1 md:border-y md:grid-cols-3 md:row-span-1 print:border-none", templ.KV("print:hidden", data.Recipe.Nutrition.Equal(models.Nutrition{})) }>
+							<div class="grid grid-flow-col border-gray-700 col-span-6 py-1 md:border-y md:grid-cols-3 md:row-span-1 print:hidden">
 								<div class="flex justify-self-center items-center gap-1 cursor-default" title="Prep time">
 									@iconCuttingBoard()
 									<time datetime={ data.FormattedTimes.PrepDateTime }>{ data.FormattedTimes.Prep }</time>
@@ -2486,12 +2519,6 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 										</tr>
 									</tbody>
 								</table>
-								if !data.Recipe.Nutrition.Equal(models.Nutrition{}) {
-									<div class="hidden pt-2 print:block print:mx-2 print:my-1">
-										<h1 class="text-sm print:mb-1"><b>Nutrition Facts</b></h1>
-										<p class="text-xs">{ data.Recipe.Nutrition.Format() }</p>
-									</div>
-								}
 							</div>
 							if data.Recipe.Description != "" {
 								<div class={ "col-span-3 min-h-40 md:h-full md:row-span-1 print:hidden", templ.KV("hidden", data.Recipe.Description == "") }>
@@ -2506,75 +2533,24 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 						</div>
 					</div>
 					if data.Recipe.Description != "" {
-						<div class="hidden print:block print:mx-2">
-							<h1 class="text-sm print:mb-1"><b>Description</b></h1>
+						<div class="hidden print:block print:mx-8 print:my-0 print:border-0 print:p-3 print:rounded-md print:break-inside-avoid">
 							{ data.Recipe.Description }
 						</div>
 					}
-					<div class="border-gray-700 md:border-t">
+					<div class="border-gray-700 md:border-t print:border-0 print:px-8">
 						@IngredientsInstructions(data)
-						<div class="hidden print:grid col-span-6 ml-2 my-1">
-							if len(data.Recipe.Tools) > 0 {
-								<h1 class="text-sm print:mb-1"><b>Tools</b></h1>
-								<ol
-									class="col-span-6 w-full mb-4"
-									if len(data.Recipe.Tools) > 10 {
-										style="column-count: 2"
-									} else {
-										style="column-count: 1"
-									}
-								>
-									for _, t := range data.Recipe.Tools {
-										<li class="text-sm">
-											<label><input type="checkbox"/></label>
-											<span class="pl-2">{ t.StringQuantity() }</span>
-										</li>
-									}
-								</ol>
-							}
-							<h1 class="text-sm print:mb-1"><b>Ingredients</b></h1>
-							<ol
-								class="col-span-6 w-full print:mb-2"
-								if len(data.Recipe.Ingredients) > 10 {
-									style="column-count: 2"
-								} else {
-									style="column-count: 1"
-								}
-							>
-								for _, e := range data.Recipe.Ingredients {
-									<li class="text-sm">
-										<label><input type="checkbox"/></label>
-										<span class="pl-2">{ e }</span>
-									</li>
-								}
-							</ol>
-						</div>
-						<div class="hidden col-span-5 overflow-visible print:inline">
-							<h1 class="text-sm print:ml-2 print:mb-1"><b>Instructions</b></h1>
-							<ol class="col-span-6 list-decimal w-full ml-6">
-								for _, e := range data.Recipe.Instructions {
-									<li class="print:mr-4">
-										<span class="text-sm whitespace-pre-line">{ e }</span>
-									</li>
-								}
-							</ol>
-						</div>
 					</div>
-					<div class="hidden print:block print:mx-2 print:mb-2 print:text-sm">
-						<h1 class="print:mb-1"><b>Source</b></h1>
-						if data.IsURL {
-							<p class="print:overflow-hidden">{ data.Recipe.URL }</p>
-						} else {
-							<p>
-								Source:
-								if data.Recipe.URL != "" {
-									{ data.Recipe.URL }
-								} else {
-									Unknown
-								}
-							</p>
-						}
-					</div>
+					if !data.Recipe.Nutrition.Equal(models.Nutrition{}) {
+						<div class="recipe-print-bg-muted hidden print:block print:mx-8 print:my-0 print:border-0 print:bg-gray-100 print:p-3 print:rounded-md print:break-inside-avoid">
+							<h1 class="text-sm font-bold print:mb-1 print:border-b print:border-black print:pb-1 print:text-center print:text-2xl print:text-[#4b1d5a]">Nutrition Facts</h1>
+							<p class="text-xs">{ data.Recipe.Nutrition.Format() }</p>
+						</div>
+					}
+					if data.Recipe.URL != "" {
+						<p class="hidden print:block print:mx-8 print:mt-0 print:mb-0 print:text-xs print:break-inside-avoid print:overflow-hidden">
+							<span class="font-bold">Source:</span> { data.Recipe.URL }
+						</p>
+					}
 				</div>
 			</div>
 		</div>
@@ -2597,7 +2573,7 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
                     console.log(`Screen lock error: ${err.name}, ${err.message}`)
                 });
         }
-    </script>
+	</script>
 }
 
 templ recipeKeywordEmpty(keywords []string) {
@@ -2628,7 +2604,7 @@ templ recipeKeywordEmpty(keywords []string) {
 }
 
 templ IngredientsInstructions(data *templates.ViewRecipeData) {
-	<div id="ingredients-instructions-container" class="grid text-sm md:grid-flow-col md:col-span-6">
+	<div id="ingredients-instructions-container" class="grid text-sm md:grid-flow-col md:col-span-6 print:grid print:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] print:gap-4 print:items-stretch print:my-0">
 		<div class="col-span-6 border-gray-700 px-4 py-2 border-y md:col-span-2 md:border-r md:border-y-0 print:hidden">
 			if len(data.Recipe.Tools) > 0 {
 				<h2 class="font-semibold text-center underline pb-1">Tools</h2>
@@ -2668,7 +2644,64 @@ templ IngredientsInstructions(data *templates.ViewRecipeData) {
 				}
 			</ol>
 		</div>
+		<div class="recipe-print-bg-ingredients hidden print:block col-span-6 ml-2 my-1 print:col-span-1 print:m-0 print:bg-[#F7DFC2] print:p-3 print:rounded-md print:break-inside-avoid print:h-full">
+			if len(data.Recipe.Tools) > 0 {
+				<div class="print:mb-2">
+					<h1 class="text-sm font-bold print:mb-1 print:border-b print:border-black print:pb-1 print:text-center">Tools</h1>
+					<ol
+						class="col-span-6 w-full mb-4"
+						if len(data.Recipe.Tools) > 10 {
+							style="column-count: 2"
+						} else {
+							style="column-count: 1"
+						}
+					>
+						for _, t := range data.Recipe.Tools {
+							<li class="text-sm">
+								<label><input type="checkbox"/></label>
+								<span class="pl-2">{ t.StringQuantity() }</span>
+							</li>
+						}
+					</ol>
+				</div>
+			}
+			<div>
+				<h1 class="text-sm font-bold print:mb-1 print:border-b print:border-black print:pb-1 print:text-center">Ingredients</h1>
+				<ul
+					class="col-span-6 w-full list-disc print:mb-2 print:pl-5"
+					if len(data.Recipe.Ingredients) > 10 {
+						style="column-count: 2"
+					} else {
+						style="column-count: 1"
+					}
+				>
+					for _, e := range data.Recipe.Ingredients {
+						<li class="text-base print:mb-1">
+							<span>{ e }</span>
+						</li>
+					}
+				</ul>
+			</div>
+		</div>
+		<div class="hidden col-span-5 overflow-visible print:block print:col-span-1 print:m-0 print:bg-white print:p-3 print:rounded-md print:break-inside-avoid print:h-full">
+			<h1 class="text-sm font-bold print:mb-1 print:border-b print:border-black print:pb-1 print:text-center">Instructions</h1>
+			<ol class="col-span-6 list-decimal w-full ml-6 print:mt-2">
+				for _, e := range data.Recipe.Instructions {
+					<li class="print:mr-4 print:mb-1 print:pb-1 print:border-b print:border-gray-300 print:break-inside-avoid">
+						<span class="text-sm whitespace-pre-line">{ e }</span>
+					</li>
+				}
+			</ol>
+		</div>
 	</div>
+}
+
+templ PrintYield(yield int16, isSwap bool) {
+	if isSwap {
+		<div id="print-yield" class="hidden print:grid print:place-items-center print:gap-1 print:text-center" hx-swap-oob="outerHTML:#print-yield"><div class="hidden print:block print:h-6">&nbsp;</div><div class="font-semibold">{ fmt.Sprint(yield) }</div><div class="text-xs uppercase tracking-wide">Servings</div></div>
+	} else {
+		<div id="print-yield" class="hidden print:grid print:place-items-center print:gap-1 print:text-center"><div class="hidden print:block print:h-6">&nbsp;</div><div class="font-semibold">{ fmt.Sprint(yield) }</div><div class="text-xs uppercase tracking-wide">Servings</div></div>
+	}
 }
 
 templ ShareLink(data templates.Data) {

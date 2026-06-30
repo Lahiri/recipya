@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/png"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -636,7 +637,7 @@ func addRecipeToPDF(pdf *gofpdf.Fpdf, r *models.Recipe) *gofpdf.Fpdf {
 		pdf.SetFont(fontFamily, "B", fontSizeBig)
 		wd := pageWidth
 		pdf.SetX(marginLeft)
-		pdf.MultiCell(wd-marginLeft-marginRight, 9, r.Name, "1", "C", false)
+		pdf.MultiCell(wd-marginLeft-marginRight, 9, r.Name, "", "C", false)
 	})
 
 	pdf.SetFooterFunc(func() {
@@ -652,6 +653,10 @@ func addRecipeToPDF(pdf *gofpdf.Fpdf, r *models.Recipe) *gofpdf.Fpdf {
 	pdf.SetFont(fontFamily, "", fontSizeSmall)
 	pdf.AddPage()
 	pdf.Rect(marginLeft, marginTop, pageWidth-marginLeft-marginRight, pageHeight-3*marginTop, "D")
+
+	y := pdf.GetY()
+	y = addRecipeHeroImage(pdf, r, marginLeft, marginRight, pageWidth, y)
+	pdf.SetY(y)
 
 	// Category, servings, source
 	pdf.SetX(marginLeft)
@@ -684,7 +689,6 @@ func addRecipeToPDF(pdf *gofpdf.Fpdf, r *models.Recipe) *gofpdf.Fpdf {
 		"Source: " + source,
 	}
 
-	y := pdf.GetY()
 	originalY := y + 9
 	maxHt := lineHt
 	for j := 0; j < 3; j++ {
@@ -702,7 +706,6 @@ func addRecipeToPDF(pdf *gofpdf.Fpdf, r *models.Recipe) *gofpdf.Fpdf {
 
 	x := marginLeft
 	for i := 0; i < 3; i++ {
-		pdf.Rect(pdf.GetX(), y, colWd, maxHt+cellGap+cellGap, "D")
 		cell = cellList[i]
 		cellY := y + cellGap + (maxHt-cell.ht)/2
 		for splitJ := 0; splitJ < len(cell.list); splitJ++ {
@@ -717,6 +720,7 @@ func addRecipeToPDF(pdf *gofpdf.Fpdf, r *models.Recipe) *gofpdf.Fpdf {
 		}
 		x += colWd
 	}
+	pdf.Line(marginLeft, y+maxHt+cellGap+cellGap, pageWidth-marginRight, y+maxHt+cellGap+cellGap)
 	y += maxHt + cellGap + cellGap
 
 	for j := 0; j < 3; j++ {
@@ -739,19 +743,17 @@ func addRecipeToPDF(pdf *gofpdf.Fpdf, r *models.Recipe) *gofpdf.Fpdf {
 		"Total: " + viewData.FormattedTimes.Total,
 	}
 	widths := []float64{colWd + 4*cellGap, colWd - 8*cellGap, colWd + 4*cellGap}
-	h := lineHt + cellGap/2
+	h := lineHt + cellGap
 	pdf.SetXY(marginLeft, y)
-	pdf.Rect(pdf.GetX(), y, widths[0], maxHt, "D")
 	pdf.CellFormat(widths[0], h, cols[0], "", 0, "C", false, 0, "")
 	pdf.SetX(marginLeft + widths[0])
-	pdf.Rect(pdf.GetX(), y, widths[1], maxHt, "D")
 	pdf.CellFormat(widths[1], h, cols[1], "", 0, "C", false, 0, "")
 	pdf.SetX(marginLeft + widths[0] + widths[1])
-	pdf.Rect(pdf.GetX(), y, widths[2], maxHt, "D")
 	pdf.SetFont(fontFamily, "B", fontSizeSmall)
 	pdf.CellFormat(widths[2], h, cols[2], "", 0, "C", false, 0, "")
 	pdf.SetFont(fontFamily, "", fontSizeSmall)
-	y += maxHt
+	pdf.Line(marginLeft, y+h, pageWidth-marginRight, y+h)
+	y += h
 
 	// Description
 	if r.Description != "" {
@@ -906,6 +908,63 @@ func addRecipeToPDF(pdf *gofpdf.Fpdf, r *models.Recipe) *gofpdf.Fpdf {
 	pdf.SetPage(pdf.PageNo())
 	pdf.Rect(marginLeft, marginTop, pageWidth-marginLeft-marginRight, pageHeight-3*marginTop, "D")
 	return pdf
+}
+
+func addRecipeHeroImage(pdf *gofpdf.Fpdf, r *models.Recipe, marginLeft, marginRight, pageWidth, y float64) float64 {
+	if len(r.Images) == 0 || r.Images[0] == uuid.Nil {
+		return y
+	}
+
+	name, buf, bounds, err := recipePDFImage(r.Images[0])
+	if err != nil {
+		return y
+	}
+
+	options := gofpdf.ImageOptions{ImageType: "png", ReadDpi: true}
+	info := pdf.RegisterImageOptionsReader(name, options, buf)
+	if info == nil {
+		return y
+	}
+
+	const (
+		heroMaxHeight = 55.0
+		heroGap       = 4.0
+	)
+
+	maxWidth := pageWidth - marginLeft - marginRight
+	aspect := float64(bounds.Dx()) / float64(bounds.Dy())
+	drawWidth := maxWidth
+	drawHeight := drawWidth / aspect
+	if drawHeight > heroMaxHeight {
+		drawHeight = heroMaxHeight
+		drawWidth = drawHeight * aspect
+	}
+
+	x := marginLeft + (maxWidth-drawWidth)/2
+	imageY := y + heroGap/2
+	pdf.ImageOptions(name, x, imageY, drawWidth, drawHeight, false, options, 0, "")
+	return imageY + drawHeight + heroGap
+}
+
+func recipePDFImage(imageID uuid.UUID) (string, *bytes.Buffer, image.Rectangle, error) {
+	file, err := os.Open(filepath.Join(app.ImagesDir, imageID.String()+app.ImageExt))
+	if err != nil {
+		return "", nil, image.Rectangle{}, err
+	}
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return "", nil, image.Rectangle{}, err
+	}
+
+	buf := bytes.NewBuffer(nil)
+	err = png.Encode(buf, imaging.Clone(img))
+	if err != nil {
+		return "", nil, image.Rectangle{}, err
+	}
+
+	return imageID.String() + ".png", buf, img.Bounds(), nil
 }
 
 // ExtractRecipes extracts the recipes from the HTTP files.
