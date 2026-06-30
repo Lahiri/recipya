@@ -2,8 +2,6 @@
 
 [![Build](https://img.shields.io/github/actions/workflow/status/reaper47/recipya/go.yml?branch=main&logo=Github)](https://github.com/reaper47/recipya/actions/workflows/go.yml)
 [![Report](https://goreportcard.com/badge/github.com/reaper47/recipya)](https://goreportcard.com/report/github.com/reaper47/recipya)
-[![Contributions](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/reaper47/recipya/issues)
-
 [![GitHub tag](https://img.shields.io/github/v/tag/reaper47/recipya?include_prereleases&label=version)](https://github.com/reaper47/recipya/tags)
 [![License](https://img.shields.io/github/license/reaper47/recipya)](./LICENSE)
 
@@ -15,7 +13,18 @@
 A clean, simple and powerful recipe manager web application for unforgettable family recipes, empowering you to curate and share your favorite recipes.
 It is focused on simplicity for the whole family to enjoy.
 
+This repository is a personal fork of [Recipya](https://github.com/reaper47/recipya). It keeps the original application's goals and design direction, while adding features and refinements I need for my own use.
+
 ![Recipe page screenshot](.github/screenshot-recipes.webp)
+
+## Changes in This Fork
+
+Compared to the original repository, this fork currently includes:
+
+- Recipe PDF exports with the recipe image included when available.
+- Improved browser print output with a cookbook-style layout, recipe image, compact metadata, nutrition summary, and source footnote.
+- Print layout refinements for spacing, rounded sections, background colors, ingredient/instruction columns, and better page fit.
+- Servings scaling improvements, including support for more ingredient quantity formats and print output that reflects the currently selected serving count.
 
 ## :warning: Important Note
 
@@ -74,26 +83,9 @@ Let's explain the mechanism developers. Basically, a cron job is run [every thre
 to check whether there is a new GitHub release. If so, the update indicators in the UI will be enabled. Once the user presses 
 the "Update" button, the latest release is fetched, unpacked and the application restarted.
 
-## Contributing
+## Credits
 
-Contributions are always welcome! Please open an issue, start a [discussion](https://github.com/reaper47/recipya/discussions), open a pull request or send an email 
-at macpoule@gmail.com. The same applies if you have any feedback or need support.
-
-You can also join our development and support channel on the [Matrix space: #recipya:matrix.org](https://app.element.io/#/room/#recipya:matrix.org).
-Matrix is similar to Discord but is open source.
-
-## Sponsors
-
-I am grateful for any support that motivates me to continue developing this project and to host it reliably.
-
-You can sponsor me on 
-[GitHub Sponsors](https://github.com/sponsors/reaper47) or
-[Buy Me a Coffee](https://www.buymeacoffee.com/macpoule).
-
-Your support is greatly appreciated! A third of donations will be sent to the Armed Forces of Ukraine 🇺🇦
-
-This project is supported by these kind people:
-<img src="scripts/sponsors/sponsors.svg" style="width:100%;max-width:800px;"/>
+This fork is based on the original [Recipya](https://github.com/reaper47/recipya) project by reaper47. Many thanks to the original author for creating and maintaining the application.
 
 ## Other Recipe Manager Apps
 
@@ -104,21 +96,3 @@ This project is supported by these kind people:
 - [Cooklist](https://cooklist.com/)
 - [Grossr](https://grossr.com/)
 - [Awesome List](https://github.com/awesome-selfhosted/awesome-selfhosted#recipe-management)
-
-# Inspiration
-
-This project was mainly coded to blasting the following albums:
-- [4am](https://www.youtube.com/watch?v=tBcPji_jRDc)
-- [Abysmal Dawn - Phylogenesis](https://www.youtube.com/watch?v=xJMybqRMedk&pp=ygUMYWJ5c21hbCBkYXdu)
-- [Archspire - Bleed the Future](https://www.youtube.com/watch?v=o8H9ahswldM)
-- [Atavistia - Cosmic Warfare](https://www.youtube.com/watch?v=VjJ_zb4RF2E)
-- [Beast In Black - Dark Connection](https://www.youtube.com/watch?v=7NyON-NzBr4)
-- [Cattle Decapitation - Terrasite](https://www.youtube.com/watch?v=x6rEDMqM36I)
-- [Ensiferum - From Afar](https://www.youtube.com/watch?v=6r8OPu3SRSM)
-- [Lofi Girl - lofi hip hop radio](https://www.youtube.com/watch?v=jfKfPfyJRdk)
-- [Lofi Girl - synthwave radio](https://www.youtube.com/watch?v=4xDzrJKXOOY)
-- [Mozart - Requiem Dm](https://www.youtube.com/watch?v=pBGVfwOLU1w0)
-- [Necrophobic - In the Twilight Grey](https://www.youtube.com/watch?v=eDFD6YnMid8)
-- [Pain - You Only Live Twice](https://www.youtube.com/watch?v=obgCEoLzLs4)
-- [Sonata Arctica - Talviyö](https://www.youtube.com/watch?v=x6rEDMqM36I)
-- [Wintersun - Wintersun](https://www.youtube.com/watch?v=W0M3HAMus7g&pp=ygUPd2ludGVyc3VuIGFsYnVt)
