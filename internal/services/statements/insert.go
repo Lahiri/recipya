@@ -67,8 +67,8 @@ const InsertNutrition = `
 
 // InsertRecipe is the query to add a recipe to the database.
 const InsertRecipe = `
-	INSERT INTO recipes (name, description, image, yield, url)
-	VALUES (trim(?), trim(?), ?, ?, trim(?))
+	INSERT INTO recipes (name, description, image, yield, url, language)
+	VALUES (trim(?), trim(?), ?, ?, trim(?), ?)
 	RETURNING id`
 
 // InsertRecipeCategory associates a recipe with a category.

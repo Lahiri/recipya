@@ -22,6 +22,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/reaper47/recipya/internal/app"
 	"github.com/reaper47/recipya/internal/auth"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/services/statements"
 	"github.com/reaper47/recipya/internal/units"
@@ -40,9 +41,10 @@ const (
 
 // SQLiteService represents the Service implemented with SQLite.
 type SQLiteService struct {
-	DB    *sql.DB
-	Mutex *sync.Mutex
-	FdcDB *sql.DB
+	DB                 *sql.DB
+	Mutex              *sync.Mutex
+	FdcDB              *sql.DB
+	ingredientProvider language.IngredientProvider
 }
 
 // NewSQLiteService creates an SQLiteService object.
@@ -76,9 +78,57 @@ func NewSQLiteService() *SQLiteService {
 	}
 
 	return &SQLiteService{
-		DB:    db,
-		FdcDB: openFdcDB(),
-		Mutex: &sync.Mutex{},
+		DB:                 db,
+		FdcDB:              openFdcDB(),
+		Mutex:              &sync.Mutex{},
+		ingredientProvider: newIngredientProvider(app.Config),
+	}
+}
+
+func newIngredientProvider(config app.ConfigFile) language.IngredientProvider {
+	translation := config.Integrations.Translation
+	if !translation.Enabled || strings.TrimSpace(translation.ResolvedAPIKey()) == "" {
+		return nil
+	}
+
+	sourceLanguages := make([]language.Code, 0, len(translation.SourceLanguages))
+	for _, value := range translation.SourceLanguages {
+		code, ok := language.Parse(value)
+		if ok && language.IsRecipeLanguage(code) && code != language.English {
+			sourceLanguages = append(sourceLanguages, code)
+		}
+	}
+
+	providerName := strings.ToLower(strings.TrimSpace(translation.Provider))
+	if providerName == "" {
+		providerName = "deepl"
+	}
+
+	switch providerName {
+	case "deepl":
+		return language.NewDeepLProvider(language.DeepLConfig{
+			APIURL:          translation.APIURL,
+			APIKey:          translation.ResolvedAPIKey(),
+			Timeout:         translation.Timeout(),
+			SourceLanguages: sourceLanguages,
+		})
+	case "google":
+		return language.NewGoogleTranslateProvider(language.GoogleTranslateConfig{
+			APIURL:          translation.APIURL,
+			APIKey:          translation.ResolvedAPIKey(),
+			Timeout:         translation.Timeout(),
+			SourceLanguages: sourceLanguages,
+		})
+	case "azure", "azure-ai", "azuretranslator", "microsoft":
+		return language.NewAzureTranslatorProvider(language.AzureTranslatorConfig{
+			APIURL:          translation.APIURL,
+			APIKey:          translation.ResolvedAPIKey(),
+			Region:          translation.Region,
+			Timeout:         translation.Timeout(),
+			SourceLanguages: sourceLanguages,
+		})
+	default:
+		return nil
 	}
 }
 
@@ -197,6 +247,80 @@ func (s *SQLiteService) AddRecipes(recipes models.Recipes, userID int64, progres
 	return ids, logs, nil
 }
 
+// BulkUpdateRecipeLanguage updates the language of many recipes belonging to a user.
+// If recipeIDs is empty, all of the user's recipes are updated.
+func (s *SQLiteService) BulkUpdateRecipeLanguage(userID int64, recipeIDs []int64, lang language.Code) ([]int64, error) {
+	lang = language.NormalizeRecipe(string(lang))
+
+	ownedRecipes := s.RecipesAll(userID)
+	if len(ownedRecipes) == 0 {
+		return nil, nil
+	}
+
+	ids := recipeIDsForBulkLanguageUpdate(ownedRecipes, recipeIDs)
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), longerCtxTimeout)
+	defer cancel()
+
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	const batchSize = 100
+	for start := 0; start < len(ids); start += batchSize {
+		end := min(start+batchSize, len(ids))
+		args := make([]any, 0, 1+end-start)
+		args = append(args, string(lang))
+
+		placeholders := make([]string, 0, end-start)
+		for _, id := range ids[start:end] {
+			placeholders = append(placeholders, "?")
+			args = append(args, id)
+		}
+
+		stmt := "UPDATE recipes SET language = trim(?) WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+		_, err = tx.ExecContext(ctx, stmt, args...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func recipeIDsForBulkLanguageUpdate(recipes models.Recipes, recipeIDs []int64) []int64 {
+	wanted := make(map[int64]struct{}, len(recipeIDs))
+	for _, id := range recipeIDs {
+		if id > 0 {
+			wanted[id] = struct{}{}
+		}
+	}
+
+	ids := make([]int64, 0, len(recipes))
+	for _, recipe := range recipes {
+		if len(wanted) == 0 {
+			ids = append(ids, recipe.ID)
+			continue
+		}
+		if _, ok := wanted[recipe.ID]; ok {
+			ids = append(ids, recipe.ID)
+		}
+	}
+	return ids
+}
+
 func (s *SQLiteService) addRecipe(r models.Recipe, userID int64, settings models.UserSettings) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), longerCtxTimeout)
 	defer cancel()
@@ -218,6 +342,7 @@ func (s *SQLiteService) addRecipe(r models.Recipe, userID int64, settings models
 	if isRecipeExists {
 		return 0, errors.New("recipe exists")
 	}
+	r.Language = recipeLanguage(r, settings)
 
 	if settings.ConvertAutomatically {
 		converted, _ := r.ConvertMeasurementSystem(settings.MeasurementSystem)
@@ -244,6 +369,21 @@ func (s *SQLiteService) addRecipe(r models.Recipe, userID int64, settings models
 	}
 
 	return recipeID, tx.Commit()
+}
+
+func recipeLanguage(r models.Recipe, settings models.UserSettings) string {
+	setting := language.NormalizeSetting(settings.RecipeLanguage)
+	if language.IsRecipeLanguage(setting) {
+		return string(setting)
+	}
+
+	detection := language.DetectRecipe(language.RecipeText{
+		Name:         r.Name,
+		Description:  r.Description,
+		Ingredients:  r.Ingredients,
+		Instructions: r.Instructions,
+	})
+	return string(language.NormalizeRecipe(string(detection.Language)))
 }
 
 func (s *SQLiteService) addRecipeTx(ctx context.Context, tx *sql.Tx, r models.Recipe, userID int64) (int64, error) {
@@ -274,6 +414,7 @@ func (s *SQLiteService) addRecipeTx(ctx context.Context, tx *sql.Tx, r models.Re
 	if r.URL == "" {
 		r.URL = "Unknown"
 	}
+	r.Language = string(language.NormalizeRecipe(r.Language))
 
 	// Insert recipe
 	var mainImage uuid.UUID
@@ -282,7 +423,7 @@ func (s *SQLiteService) addRecipeTx(ctx context.Context, tx *sql.Tx, r models.Re
 	}
 
 	var recipeID int64
-	err := tx.QueryRowContext(ctx, statements.InsertRecipe, r.Name, r.Description, mainImage, r.Yield, r.URL).Scan(&recipeID)
+	err := tx.QueryRowContext(ctx, statements.InsertRecipe, r.Name, r.Description, mainImage, r.Yield, r.URL, r.Language).Scan(&recipeID)
 	if err != nil {
 		return 0, err
 	}
@@ -643,35 +784,71 @@ func (s *SQLiteService) calculateNutrition(userID int64, recipes []int64, settin
 		defer cancel()
 
 		for _, id := range recipes {
-			s.Mutex.Lock()
 			recipe, err := s.Recipe(id, userID)
 			if err != nil {
 				slog.Error("CalculateNutrition.Recipe failed", "error", err)
 				continue
 			}
-			s.Mutex.Unlock()
 
 			if !force && !recipe.Nutrition.Equal(models.Nutrition{}) {
 				continue
 			}
 
-			nutrients, weight, err := s.Nutrients(recipe.Ingredients)
-			if err != nil {
-				slog.Error("CalculateNutrition.Nutrients failed", "error", err)
-				continue
+			if err := s.storeRecipeNutrition(ctx, recipe); err != nil {
+				slog.Error("CalculateNutrition failed", "recipeID", id, "error", err)
 			}
-
-			recipe.Nutrition = nutrients.NutritionFact(weight)
-			n := recipe.Nutrition
-
-			s.Mutex.Lock()
-			_, err = s.DB.ExecContext(ctx, statements.UpdateNutrition, n.Calories, n.TotalCarbohydrates, n.Sugars, n.Protein, n.TotalFat, n.SaturatedFat, n.UnsaturatedFat, n.TransFat, n.Cholesterol, n.Sodium, n.Fiber, n.IsPerServing, id)
-			if err != nil {
-				slog.Error("CalculateNutrition.UpdateNutrition failed", "error", err)
-			}
-			s.Mutex.Unlock()
 		}
 	}()
+}
+
+// RecalculateNutrition recalculates nutrition for the given recipes and reports progress after each recipe.
+func (s *SQLiteService) RecalculateNutrition(userID int64, recipeIDs []int64, progress chan models.Progress) []models.ReportLog {
+	logs := make([]models.ReportLog, 0)
+	total := len(recipeIDs)
+
+	for i, id := range recipeIDs {
+		recipe, err := s.recalculateNutritionForRecipe(userID, id)
+		if err != nil {
+			title := strconv.FormatInt(id, 10)
+			if recipe != nil && recipe.Name != "" {
+				title = recipe.Name
+			}
+			logs = append(logs, models.NewReportLog(title, false, err, ""))
+			slog.Warn("Bulk nutrition refresh failed", slog.Int64("userID", userID), slog.Int64("recipeID", id), "error", err)
+		}
+
+		if progress != nil {
+			progress <- models.Progress{Value: i + 1, Total: total}
+		}
+	}
+	return logs
+}
+
+func (s *SQLiteService) recalculateNutritionForRecipe(userID, recipeID int64) (*models.Recipe, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), longerCtxTimeout)
+	defer cancel()
+
+	recipe, err := s.Recipe(recipeID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return recipe, s.storeRecipeNutrition(ctx, recipe)
+}
+
+// storeRecipeNutrition computes the recipe's nutrition facts from its ingredients and persists them.
+func (s *SQLiteService) storeRecipeNutrition(ctx context.Context, recipe *models.Recipe) error {
+	nutrients, weight, err := s.Nutrients(recipe.Ingredients, language.NormalizeRecipe(recipe.Language))
+	if err != nil {
+		return err
+	}
+
+	n := nutrients.NutritionFact(weight)
+
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+	_, err = s.DB.ExecContext(ctx, statements.UpdateNutrition, n.Calories, n.TotalCarbohydrates, n.Sugars, n.Protein, n.TotalFat, n.SaturatedFat, n.UnsaturatedFat, n.TransFat, n.Cholesterol, n.Sodium, n.Fiber, n.IsPerServing, recipe.ID)
+	return err
 }
 
 // Categories gets all user categories from the database.
@@ -1170,9 +1347,10 @@ func (s *SQLiteService) MeasurementSystems(userID int64) ([]units.System, models
 		calculateNutrition   int64
 		convertAutomatically int64
 		groupedSystems       string
+		recipeLanguage       string
 		selected             string
 	)
-	err := s.DB.QueryRowContext(ctx, statements.SelectMeasurementSystems, userID).Scan(&selected, &groupedSystems, &convertAutomatically, &calculateNutrition)
+	err := s.DB.QueryRowContext(ctx, statements.SelectMeasurementSystems, userID).Scan(&selected, &groupedSystems, &convertAutomatically, &calculateNutrition, &recipeLanguage)
 	if err != nil {
 		return nil, models.UserSettings{}, err
 	}
@@ -1186,18 +1364,20 @@ func (s *SQLiteService) MeasurementSystems(userID int64) ([]units.System, models
 		CalculateNutritionFact: calculateNutrition == 1,
 		ConvertAutomatically:   convertAutomatically == 1,
 		MeasurementSystem:      units.NewSystem(selected),
+		RecipeLanguage:         string(language.NormalizeSetting(recipeLanguage)),
 	}, nil
 }
 
 // Nutrients gets the nutrients for the ingredients from the FDC database, along with the total weight.
-func (s *SQLiteService) Nutrients(ingredients []string) (models.NutrientsFDC, float64, error) {
+func (s *SQLiteService) Nutrients(ingredients []string, sourceLanguage language.Code) (models.NutrientsFDC, float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), longerCtxTimeout)
 	defer cancel()
 
 	var wg sync.WaitGroup
+	normalizedIngredients := normalizeIngredientsForNutrition(ctx, ingredients, sourceLanguage, s.ingredientProvider)
 	wg.Add(len(ingredients))
 	tokens := make([]units.TokenizedIngredient, len(ingredients))
-	for i, ing := range ingredients {
+	for i, ing := range normalizedIngredients {
 		go func(s string, index int) {
 			defer wg.Done()
 			tokens[index] = units.NewTokenizedIngredientFromText(s)
@@ -1246,6 +1426,29 @@ func (s *SQLiteService) Nutrients(ingredients []string) (models.NutrientsFDC, fl
 	}
 
 	return nutrients, weight, nil
+}
+
+func normalizeIngredientsForNutrition(ctx context.Context, ingredients []string, sourceLanguage language.Code, provider language.IngredientProvider) []string {
+	normalizer := language.NewNormalizer(provider)
+	cache := make(map[string]string, len(ingredients))
+	normalizedIngredients := make([]string, len(ingredients))
+	for i, ingredient := range ingredients {
+		if normalized, ok := cache[ingredient]; ok {
+			normalizedIngredients[i] = normalized
+			continue
+		}
+
+		normalized, err := normalizer.NormalizeIngredient(ctx, ingredient, sourceLanguage, language.English)
+		if err != nil {
+			normalized = ingredient
+		}
+		if normalized == "" {
+			normalized = ingredient
+		}
+		cache[ingredient] = normalized
+		normalizedIngredients[i] = normalized
+	}
+	return normalizedIngredients
 }
 
 // Recipe gets the user's recipe of the given id.
@@ -1677,7 +1880,7 @@ func scanRecipe(sc scanner, isSearch bool) (*models.Recipe, error) {
 		}
 	} else {
 		err = sc.Scan(
-			&r.ID, &r.Name, &r.Description, &mainImage, &otherImagesStr, &r.URL, &r.Yield, &r.CreatedAt, &r.UpdatedAt, &r.Category, &r.Cuisine,
+			&r.ID, &r.Name, &r.Description, &r.Language, &mainImage, &otherImagesStr, &r.URL, &r.Yield, &r.CreatedAt, &r.UpdatedAt, &r.Category, &r.Cuisine,
 			&ingredients, &instructions, &keywords, &tools, &r.Nutrition.Calories, &r.Nutrition.TotalCarbohydrates,
 			&r.Nutrition.Sugars, &r.Nutrition.Protein, &r.Nutrition.TotalFat, &r.Nutrition.SaturatedFat, &r.Nutrition.UnsaturatedFat, &transFat,
 			&r.Nutrition.Cholesterol, &r.Nutrition.Sodium, &r.Nutrition.Fiber, &isPerServing, &r.Times.Prep, &r.Times.Cook, &r.Times.Total,
@@ -2124,7 +2327,17 @@ func (s *SQLiteService) UpdateRecipe(updatedRecipe *models.Recipe, userID int64,
 		updateFields["yield"] = updatedRecipe.Yield
 	}
 
-	fields := []string{"name", "description", "image", "yield", "url"}
+	if updatedRecipe.Language == "" {
+		updatedRecipe.Language = oldRecipe.Language
+	} else {
+		updatedRecipe.Language = string(language.NormalizeRecipe(updatedRecipe.Language))
+	}
+	isLanguageUpdated := updatedRecipe.Language != oldRecipe.Language
+	if isLanguageUpdated {
+		updateFields["language"] = updatedRecipe.Language
+	}
+
+	fields := []string{"name", "description", "image", "yield", "url", "language"}
 	for _, field := range fields {
 		if _, ok := updateFields[field]; ok {
 			var xs []string
@@ -2235,7 +2448,7 @@ func (s *SQLiteService) UpdateRecipe(updatedRecipe *models.Recipe, userID int64,
 		return err
 	}
 
-	if isIngredientsUpdated {
+	if shouldRecalculateNutrition(isIngredientsUpdated, isLanguageUpdated) {
 		settings, err := s.UserSettings(userID)
 		if err != nil {
 			slog.Warn("Could not calculate nutrition", userIDAttr, recipeIDAttr, "error", err)
@@ -2245,6 +2458,22 @@ func (s *SQLiteService) UpdateRecipe(updatedRecipe *models.Recipe, userID int64,
 	}
 
 	return nil
+}
+
+func shouldRecalculateNutrition(isIngredientsUpdated, isLanguageUpdated bool) bool {
+	return isIngredientsUpdated || isLanguageUpdated
+}
+
+// UpdateRecipeLanguage updates the user's default recipe language setting.
+func (s *SQLiteService) UpdateRecipeLanguage(userID int64, lang string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), shortCtxTimeout)
+	defer cancel()
+
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+
+	_, err := s.DB.ExecContext(ctx, statements.UpdateRecipeLanguage, lang, userID)
+	return err
 }
 
 // UpdateUserSettingsCookbooksViewMode updates the user's preferred cookbooks viewing mode.
@@ -2299,13 +2528,15 @@ func (s *SQLiteService) UserSettings(userID int64) (models.UserSettings, error) 
 		convertAutomatically int64
 		cookbooksViewMode    int64
 		measurementSystem    string
+		recipeLanguage       string
 	)
-	err := s.DB.QueryRowContext(ctx, statements.SelectUserSettings, userID).Scan(&measurementSystem, &convertAutomatically, &cookbooksViewMode, &calculateNutrition)
+	err := s.DB.QueryRowContext(ctx, statements.SelectUserSettings, userID).Scan(&measurementSystem, &convertAutomatically, &cookbooksViewMode, &calculateNutrition, &recipeLanguage)
 	return models.UserSettings{
 		CalculateNutritionFact: calculateNutrition == 1,
 		CookbooksViewMode:      models.ViewModeFromInt(cookbooksViewMode),
 		ConvertAutomatically:   convertAutomatically == 1,
 		MeasurementSystem:      units.NewSystem(measurementSystem),
+		RecipeLanguage:         string(language.NormalizeSetting(recipeLanguage)),
 	}, err
 }
 

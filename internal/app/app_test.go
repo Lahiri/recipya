@@ -125,6 +125,14 @@ func TestNewConfig(t *testing.T) {
 				Endpoint: "https://{resource_di}.cognitiveservices.azure.com",
 				Key:      "KEY_1",
 			},
+			Translation: app.ConfigTranslation{
+				Enabled:         true,
+				Provider:        "deepl",
+				APIURL:          "https://api-free.deepl.com",
+				APIKeyEnv:       "RECIPYA_DEEPL_API_KEY",
+				TimeoutSeconds:  5,
+				SourceLanguages: []string{"it"},
+			},
 		},
 		Server: app.ConfigServer{
 			IsDemo:       false,
@@ -135,15 +143,21 @@ func TestNewConfig(t *testing.T) {
 	}
 
 	env := map[string]string{
-		"RECIPYA_DI_ENDPOINT":         "https://{resource_di}.cognitiveservices.azure.com",
-		"RECIPYA_DI_KEY":              "KEY_1",
-		"RECIPYA_EMAIL":               "my@email.com",
-		"RECIPYA_EMAIL_SMTP_HOST":     "smtp.gmail.com",
-		"RECIPYA_EMAIL_SMTP_USERNAME": "my@email.com",
-		"RECIPYA_EMAIL_SMTP_PASSWORD": "app password",
-		"RECIPYA_SERVER_IS_DEMO":      "false",
-		"RECIPYA_SERVER_IS_PROD":      "false",
-		"RECIPYA_SERVER_PORT":         "8078",
+		"RECIPYA_DI_ENDPOINT":                  "https://{resource_di}.cognitiveservices.azure.com",
+		"RECIPYA_DI_KEY":                       "KEY_1",
+		"RECIPYA_TRANSLATION_ENABLED":          "true",
+		"RECIPYA_TRANSLATION_PROVIDER":         "deepl",
+		"RECIPYA_TRANSLATION_API_URL":          "https://api-free.deepl.com",
+		"RECIPYA_TRANSLATION_API_KEY_ENV":      "RECIPYA_DEEPL_API_KEY",
+		"RECIPYA_TRANSLATION_TIMEOUT_SECONDS":  "5",
+		"RECIPYA_TRANSLATION_SOURCE_LANGUAGES": "it",
+		"RECIPYA_EMAIL":                        "my@email.com",
+		"RECIPYA_EMAIL_SMTP_HOST":              "smtp.gmail.com",
+		"RECIPYA_EMAIL_SMTP_USERNAME":          "my@email.com",
+		"RECIPYA_EMAIL_SMTP_PASSWORD":          "app password",
+		"RECIPYA_SERVER_IS_DEMO":               "false",
+		"RECIPYA_SERVER_IS_PROD":               "false",
+		"RECIPYA_SERVER_PORT":                  "8078",
 	}
 
 	t.Run("load from config file", func(t *testing.T) {

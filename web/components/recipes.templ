@@ -3,6 +3,7 @@ package components
 import (
 	"fmt"
 	"github.com/reaper47/recipya/internal/app"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/templates"
 	"strconv"
@@ -434,7 +435,7 @@ templ addRecipeManual(data *templates.ViewRecipeData) {
 								</div>
 							</div>
 							<div class="grid grid-cols-3 col-span-3 text-sm md:grid-flow-row md:grid-rows-4" style="grid-template-rows: auto">
-								<div class="grid col-span-6 pb-2 md:grid-cols-3 md:pb-0 md:border-gray-700 md:border-t">
+								<div class="grid col-span-6 pb-2 md:grid-cols-4 md:pb-0 md:border-gray-700 md:border-t">
 									<div
 										style="display: grid;grid-auto-flow: column;"
 										class="grid grid-flow-col grid-cols-3 gap-2 border-b border-t border-gray-700 px-2 md:col-span-2 md:border-b-0 md:border-r md:border-t-0 md:px-0"
@@ -1498,6 +1499,18 @@ templ editRecipe(data *templates.ViewRecipeData) {
 											</label>
 										</div>
 									</div>
+									<div class="px-2 md:grid md:content-center md:border-r md:border-gray-700">
+										<label class="form-control w-full">
+											<div class="label">
+												<span class="label-text">Language</span>
+											</div>
+											<select name="language" class="select select-bordered select-sm md:w-28 lg:w-40 xl:w-44">
+												for _, option := range language.RecipeOptions() {
+													<option value={ string(option.Code) } selected?={ data.Recipe.Language == string(option.Code) }>{ option.Label }</option>
+												}
+											</select>
+										</label>
+									</div>
 									<div class="relative px-2 md:grid md:content-center md:pr-0">
 										<label class="form-control w-full">
 											<div class="label">
@@ -2322,6 +2335,13 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 									} else {
 										<p class="text-sm text-center">{ fmt.Sprint(data.Recipe.Yield) } servings</p>
 									}
+								</div>
+								<div class="flex items-center justify-center col-span-2 border-r border-gray-700 text-sm md:col-span-1 print:hidden">
+									<p class="text-center">
+										Language:
+										<br class="hidden md:block"/>
+										{ language.Label(language.NormalizeRecipe(data.Recipe.Language)) }
+									</p>
 								</div>
 								<div class="flex items-center justify-center col-span-2 text-sm md:col-span-1 print:hidden">
 									if data.IsURL {

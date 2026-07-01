@@ -1,6 +1,7 @@
 package components
 
 import (
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/templates"
 	"time"
 )
@@ -114,6 +115,46 @@ templ settingsRecipes(data templates.Data) {
 				hx-post="/settings/convert-automatically"
 				hx-trigger="click"
 			/>
+		</div>
+		<div class="divider m-0"></div>
+		<div class="flex justify-between items-center text-sm">
+			<label for="settings_recipes_language">
+				<span class="font-semibold">Recipe language</span>
+				<br/>
+				<span class="text-xs block max-w-[45ch]">Used to detect and translate ingredients for nutrition lookup.</span>
+			</label>
+			<select id="settings_recipes_language" name="recipe-language" class="w-fit select select-bordered select-sm" hx-post="/settings/recipe-language" hx-swap="none">
+				for _, option := range language.SettingOptions() {
+					<option value={ string(option.Code) } selected?={ string(option.Code) == data.Settings.UserSettings.RecipeLanguage }>{ option.Label }</option>
+				}
+			</select>
+		</div>
+		<div class="divider m-0"></div>
+		<div class="flex justify-between items-center text-sm">
+			<details class="w-full">
+				<summary class="font-semibold cursor-default">
+					Bulk recipe language
+					<br/>
+					<span class="text-xs font-normal">Update every recipe language and optionally refresh nutrition in the background.</span>
+				</summary>
+				<form class="grid gap-2 pt-2" hx-post="/settings/recipes/bulk-language" hx-swap="none" hx-confirm="Update all recipe languages?">
+					<label class="form-control w-full">
+						<span class="label">
+							<span class="label-text text-sm">Language</span>
+						</span>
+						<select name="language" class="w-fit select select-bordered select-sm">
+							for _, option := range language.RecipeOptions() {
+								<option value={ string(option.Code) } selected?={ string(option.Code) == data.Settings.UserSettings.RecipeLanguage }>{ option.Label }</option>
+							}
+						</select>
+					</label>
+					<label class="label cursor-pointer justify-start gap-2 p-0">
+						<input type="checkbox" name="refresh-nutrition" class="checkbox checkbox-sm" checked/>
+						<span class="label-text text-sm">Refresh nutrition facts after updating language</span>
+					</label>
+					<button class="btn btn-outline btn-sm w-fit">Apply to all recipes</button>
+				</form>
+			</details>
 		</div>
 		<div class="divider m-0"></div>
 		<div class="flex justify-between items-center text-sm mt-2">

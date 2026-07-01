@@ -38,6 +38,12 @@ const UpdateMeasurementSystem = `
 	SET measurement_system_id = (SELECT id FROM measurement_systems WHERE name = ?)
 	WHERE user_id = ?`
 
+// UpdateRecipeLanguage is the query to update the user's default recipe language setting.
+const UpdateRecipeLanguage = `
+	UPDATE user_settings
+	SET recipe_language = ?
+	WHERE user_id = ?`
+
 // UpdateNutrition updates the recipe's nutrition.
 const UpdateNutrition = `
 	UPDATE nutrition 

@@ -799,6 +799,7 @@ func TestRecipe_Copy(t *testing.T) {
 			"Eat",
 		},
 		Keywords: []string{"eggs", "meat", "juicy"},
+		Language: "it",
 		Name:     "Chicken Sauce",
 		Nutrition: models.Nutrition{
 			Calories:           "1g",

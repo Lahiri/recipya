@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/reaper47/recipya/internal/app"
 	"io"
 	"log/slog"
 	"maps"
@@ -13,6 +11,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/reaper47/recipya/internal/app"
 )
 
 // Key is a type alias for a context key.
@@ -43,6 +44,7 @@ var excludedURIs = map[string]struct{}{
 	"/settings/calculate-nutrition":      {},
 	"/settings/convert-automatically":    {},
 	"/settings/measurement-system":       {},
+	"/settings/recipe-language":          {},
 	"/update/check":                      {},
 	"/user-initials":                     {},
 	"/ws":                                {},

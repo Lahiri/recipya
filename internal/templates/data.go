@@ -5,6 +5,7 @@ import (
 	"github.com/blang/semver"
 	"github.com/google/uuid"
 	"github.com/reaper47/recipya/internal/app"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/units"
 	"os"
@@ -157,6 +158,7 @@ type Backup struct {
 
 // NewViewRecipeData creates and populates a new ViewRecipeData.
 func NewViewRecipeData(id int64, recipe *models.Recipe, categories, keywords []string, isFromHost, isShared bool) *ViewRecipeData {
+	recipeLanguage := language.NormalizeRecipe(recipe.Language)
 	return &ViewRecipeData{
 		Categories:     categories,
 		FormattedTimes: newFormattedTimes(recipe.Times),
@@ -181,8 +183,11 @@ func NewViewRecipeData(id int64, recipe *models.Recipe, categories, keywords []s
 			}
 			return xb
 		}(recipe.Videos),
-		Keywords: keywords,
-		Recipe:   recipe,
+		Keywords:              keywords,
+		Recipe:                recipe,
+		RecipeLanguage:        recipeLanguage,
+		RecipeLanguageLabel:   language.Label(recipeLanguage),
+		RecipeLanguageOptions: language.RecipeOptions(),
 		Share: ShareData{
 			IsFromHost: isFromHost,
 			IsShared:   isShared,
@@ -192,16 +197,19 @@ func NewViewRecipeData(id int64, recipe *models.Recipe, categories, keywords []s
 
 // ViewRecipeData holds template data related to viewing a recipe.
 type ViewRecipeData struct {
-	Categories     []string
-	FormattedTimes formattedTimes
-	ID             int64
-	Inc            func(n int) int
-	IsImagesExist  []bool
-	IsURL          bool
-	IsVideoExist   []bool
-	Keywords       []string
-	Recipe         *models.Recipe
-	Share          ShareData
+	Categories            []string
+	FormattedTimes        formattedTimes
+	ID                    int64
+	Inc                   func(n int) int
+	IsImagesExist         []bool
+	IsURL                 bool
+	IsVideoExist          []bool
+	Keywords              []string
+	Recipe                *models.Recipe
+	RecipeLanguage        language.Code
+	RecipeLanguageLabel   string
+	RecipeLanguageOptions []language.Option
+	Share                 ShareData
 }
 
 func newFormattedTimes(times models.Times) formattedTimes {

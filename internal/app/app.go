@@ -125,6 +125,7 @@ func (c *ConfigFile) Update(updated ConfigFile) error {
 	c.Email.Password = updated.Email.Password
 	c.Integrations.AzureDI.Endpoint = updated.Integrations.AzureDI.Endpoint
 	c.Integrations.AzureDI.Key = updated.Integrations.AzureDI.Key
+	c.Integrations.Translation = updated.Integrations.Translation
 	c.Server.IsAutologin = updated.Server.IsAutologin
 	c.Server.IsNoSignups = updated.Server.IsNoSignups
 	c.Server.IsProduction = updated.Server.IsProduction
@@ -154,6 +155,13 @@ func (c *ConfigFile) Update(updated ConfigFile) error {
 
 		_ = os.Setenv("RECIPYA_DI_ENDPOINT", c.Integrations.AzureDI.Endpoint)
 		_ = os.Setenv("RECIPYA_DI_KEY", c.Integrations.AzureDI.Key)
+		_ = os.Setenv("RECIPYA_TRANSLATION_ENABLED", strconv.FormatBool(c.Integrations.Translation.Enabled))
+		_ = os.Setenv("RECIPYA_TRANSLATION_PROVIDER", c.Integrations.Translation.Provider)
+		_ = os.Setenv("RECIPYA_TRANSLATION_API_URL", c.Integrations.Translation.APIURL)
+		_ = os.Setenv("RECIPYA_TRANSLATION_API_KEY", c.Integrations.Translation.APIKey)
+		_ = os.Setenv("RECIPYA_TRANSLATION_API_KEY_ENV", c.Integrations.Translation.APIKeyEnv)
+		_ = os.Setenv("RECIPYA_TRANSLATION_TIMEOUT_SECONDS", strconv.Itoa(c.Integrations.Translation.TimeoutSeconds))
+		_ = os.Setenv("RECIPYA_TRANSLATION_SOURCE_LANGUAGES", strings.Join(c.Integrations.Translation.SourceLanguages, ","))
 		_ = os.Setenv("RECIPYA_EMAIL", c.Email.From)
 		_ = os.Setenv("RECIPYA_EMAIL_SMTP_HOST", c.Email.Host)
 		_ = os.Setenv("RECIPYA_EMAIL_SMTP_USERNAME", c.Email.Username)
@@ -204,7 +212,38 @@ type ConfigEmail struct {
 
 // ConfigIntegrations holds configuration data for 3rd-party services.
 type ConfigIntegrations struct {
-	AzureDI AzureDI `json:"azureDocumentIntelligence"`
+	AzureDI     AzureDI           `json:"azureDocumentIntelligence"`
+	Translation ConfigTranslation `json:"translation"`
+}
+
+// ConfigTranslation holds configuration data for ingredient translation fallbacks.
+type ConfigTranslation struct {
+	Enabled         bool     `json:"enabled"`
+	Provider        string   `json:"provider"`
+	APIURL          string   `json:"apiUrl"`
+	APIKey          string   `json:"apiKey"`
+	APIKeyEnv       string   `json:"apiKeyEnv"`
+	Region          string   `json:"region"`
+	TimeoutSeconds  int      `json:"timeoutSeconds"`
+	SourceLanguages []string `json:"sourceLanguages"`
+}
+
+// ResolvedAPIKey returns the configured translation API key.
+func (c ConfigTranslation) ResolvedAPIKey() string {
+	if c.APIKeyEnv != "" {
+		if key := os.Getenv(c.APIKeyEnv); key != "" {
+			return key
+		}
+	}
+	return c.APIKey
+}
+
+// Timeout returns the translation request timeout.
+func (c ConfigTranslation) Timeout() time.Duration {
+	if c.TimeoutSeconds <= 0 {
+		return 5 * time.Second
+	}
+	return time.Duration(c.TimeoutSeconds) * time.Second
 }
 
 // AzureDI holds configuration data for the Azure AI Document Intelligence integration.
@@ -305,6 +344,7 @@ func Init() {
 func NewConfig(r io.Reader) {
 	if r == nil {
 		port, _ := strconv.ParseInt(os.Getenv("RECIPYA_SERVER_PORT"), 10, 32)
+		translationTimeout, _ := strconv.ParseInt(os.Getenv("RECIPYA_TRANSLATION_TIMEOUT_SECONDS"), 10, 32)
 
 		if os.Getenv("RECIPYA_VISION_KEY") != "" {
 			fmt.Println("The 'RECIPYA_VISION_KEY' is deprecated. Please use 'RECIPYA_DI_KEY'.")
@@ -321,6 +361,16 @@ func NewConfig(r io.Reader) {
 				AzureDI: AzureDI{
 					Endpoint: strings.TrimSuffix(os.Getenv("RECIPYA_DI_ENDPOINT"), "/"),
 					Key:      os.Getenv("RECIPYA_DI_KEY"),
+				},
+				Translation: ConfigTranslation{
+					Enabled:         envBoolOrDefault("RECIPYA_TRANSLATION_ENABLED", true),
+					Provider:        os.Getenv("RECIPYA_TRANSLATION_PROVIDER"),
+					APIURL:          strings.TrimSuffix(os.Getenv("RECIPYA_TRANSLATION_API_URL"), "/"),
+					APIKey:          os.Getenv("RECIPYA_TRANSLATION_API_KEY"),
+					APIKeyEnv:       os.Getenv("RECIPYA_TRANSLATION_API_KEY_ENV"),
+					Region:          strings.TrimSpace(os.Getenv("RECIPYA_TRANSLATION_REGION")),
+					TimeoutSeconds:  int(translationTimeout),
+					SourceLanguages: splitConfigList(os.Getenv("RECIPYA_TRANSLATION_SOURCE_LANGUAGES")),
 				},
 			},
 			Server: ConfigServer{
@@ -343,4 +393,27 @@ func NewConfig(r io.Reader) {
 	if Config.Server.URL == "" {
 		Config.Server.URL = "http://0.0.0.0"
 	}
+}
+
+func splitConfigList(value string) []string {
+	fields := strings.Split(value, ",")
+	values := make([]string, 0, len(fields))
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field != "" {
+			values = append(values, field)
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}
+
+func envBoolOrDefault(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value == "true"
 }

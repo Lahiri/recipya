@@ -17,6 +17,7 @@ import (
 	"github.com/google/go-github/v59/github"
 	"github.com/google/uuid"
 	"github.com/reaper47/recipya/internal/auth"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/server"
 	"github.com/reaper47/recipya/internal/services"
@@ -57,6 +58,7 @@ type mockRepository struct {
 	AddRecipeCategoryFunc              func(name string, userID int64) error
 	AddRecipesFunc                     func(recipes models.Recipes, userID int64, progress chan models.Progress) ([]int64, []models.ReportLog, error)
 	AddShareRecipeFunc                 func(recipeID, userID int64) (int64, error)
+	BulkUpdateRecipeLanguageFunc       func(userID int64, recipeIDs []int64, lang language.Code) ([]int64, error)
 	categories                         map[int64][]string
 	CookbooksFunc                      func(userID int64) ([]models.Cookbook, error)
 	CookbooksRegistered                map[int64][]models.Cookbook
@@ -65,6 +67,7 @@ type mockRepository struct {
 	IsUserPasswordFunc                 func(userID int64, password string) bool
 	MeasurementSystemsFunc             func(userID int64) ([]units.System, models.UserSettings, error)
 	RecipeFunc                         func(id, userID int64) (*models.Recipe, error)
+	RecalculateNutritionFunc           func(userID int64, recipeIDs []int64, progress chan models.Progress) []models.ReportLog
 	RecipesRegistered                  map[int64]models.Recipes
 	Reports                            map[int64][]models.Report
 	ReportsFunc                        func(userID int64) ([]models.Report, error)
@@ -74,6 +77,7 @@ type mockRepository struct {
 	UpdateCookbookImageFunc            func(id int64, image uuid.UUID, userID int64) error
 	UpdateConvertMeasurementSystemFunc func(userID int64, isEnabled bool) error
 	UpdateCalculateNutritionFunc       func(userID int64, isEnabled bool) error
+	UpdateRecipeLanguageFunc           func(userID int64, lang string) error
 	UserSettingsRegistered             map[int64]*models.UserSettings
 	UsersRegistered                    []models.User
 	UsersUpdated                       []int64
@@ -127,6 +131,44 @@ func (m *mockRepository) AddRecipes(xr models.Recipes, userID int64, progress ch
 	}
 
 	return recipeIDs, nil, nil
+}
+
+func (m *mockRepository) BulkUpdateRecipeLanguage(userID int64, recipeIDs []int64, lang language.Code) ([]int64, error) {
+	if m.BulkUpdateRecipeLanguageFunc != nil {
+		return m.BulkUpdateRecipeLanguageFunc(userID, recipeIDs, lang)
+	}
+
+	recipes := m.RecipesRegistered[userID]
+	wanted := make(map[int64]struct{}, len(recipeIDs))
+	for _, id := range recipeIDs {
+		wanted[id] = struct{}{}
+	}
+
+	updatedIDs := make([]int64, 0, len(recipes))
+	for i := range recipes {
+		if len(wanted) > 0 {
+			if _, ok := wanted[recipes[i].ID]; !ok {
+				continue
+			}
+		}
+		recipes[i].Language = string(language.NormalizeRecipe(string(lang)))
+		updatedIDs = append(updatedIDs, recipes[i].ID)
+	}
+	m.RecipesRegistered[userID] = recipes
+	return updatedIDs, nil
+}
+
+func (m *mockRepository) RecalculateNutrition(userID int64, recipeIDs []int64, progress chan models.Progress) []models.ReportLog {
+	if m.RecalculateNutritionFunc != nil {
+		return m.RecalculateNutritionFunc(userID, recipeIDs, progress)
+	}
+
+	for i := range recipeIDs {
+		if progress != nil {
+			progress <- models.Progress{Value: i + 1, Total: len(recipeIDs)}
+		}
+	}
+	return nil
 }
 
 func (m *mockRepository) AddShareLink(share models.Share) (string, error) {
@@ -519,10 +561,11 @@ func (m *mockRepository) MeasurementSystems(userID int64) ([]units.System, model
 	return []units.System{units.ImperialSystem, units.MetricSystem}, models.UserSettings{
 		ConvertAutomatically: false,
 		MeasurementSystem:    units.MetricSystem,
+		RecipeLanguage:       "auto",
 	}, nil
 }
 
-func (m *mockRepository) Nutrients(_ []string) (models.NutrientsFDC, float64, error) {
+func (m *mockRepository) Nutrients(_ []string, _ language.Code) (models.NutrientsFDC, float64, error) {
 	return models.NutrientsFDC{}, 0, nil
 }
 
@@ -723,6 +766,24 @@ func (m *mockRepository) UpdateConvertMeasurementSystem(userID int64, isEnabled 
 	return nil
 }
 
+func (m *mockRepository) UpdateRecipeLanguage(userID int64, lang string) error {
+	if m.UpdateRecipeLanguageFunc != nil {
+		return m.UpdateRecipeLanguageFunc(userID, lang)
+	}
+
+	settings, ok := m.UserSettingsRegistered[userID]
+	if !ok {
+		return errors.New("user not found")
+	}
+
+	if settings == nil {
+		return errors.New("settings for user is empty")
+	}
+
+	settings.RecipeLanguage = lang
+	return nil
+}
+
 func (m *mockRepository) UpdateCookbookImage(id int64, image uuid.UUID, userID int64) error {
 	if m.UpdateCookbookImageFunc != nil {
 		return m.UpdateCookbookImageFunc(id, image, userID)
@@ -850,6 +911,10 @@ func (m *mockRepository) UpdateRecipe(updatedRecipe *models.Recipe, userID int64
 			updatedRecipe.Name = oldRecipe.Name
 		}
 		newRecipe.Name = updatedRecipe.Name
+	}
+
+	if updatedRecipe.Language != "" && oldRecipe.Language != updatedRecipe.Language {
+		newRecipe.Language = updatedRecipe.Language
 	}
 
 	// To save some lines...

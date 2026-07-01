@@ -8,9 +8,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/reaper47/recipya/internal/app"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/services"
 	"github.com/reaper47/recipya/internal/units"
@@ -154,7 +156,12 @@ func TestHandlers_Settings(t *testing.T) {
 			`<li><a class="setting-tab" _="on click add .hidden to the children of #settings_blocks then remove .hidden from #settings_account"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path></svg>Account</a></li>`,
 			`<li><a class="setting-tab" _="on click add .hidden to the children of #settings_blocks then remove .hidden from #settings_about"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"></path></svg>About</a></li></ul>`,
 			`<div id="settings_blocks" class="w-full md:h-[26rem] md:max-h-[26rem]" style="padding-right: 1rem">`,
-			`<div id="settings_recipes" class="p-3 md:p-0 md:pr-4 md:max-h-96 overflow-y-auto"><div class="flex justify-between items-center text-sm"><details class="w-full"><summary class="font-semibold cursor-default">Categories</summary><div class="flex flex-wrap gap-2 p-2"><div class="badge badge-outline p-3 pr-0"><form class="inline-flex" hx-delete="/recipes/categories" hx-target="closest <div/>" hx-swap="delete"><input type="hidden" name="category" value="breakfast"> <span class="select-none">breakfast</span> <button type="submit" class="btn btn-xs btn-ghost">X</button></form></div><div class="badge badge-outline p-3 pr-0"><form class="inline-flex" hx-delete="/recipes/categories" hx-target="closest <div/>" hx-swap="delete"><input type="hidden" name="category" value="lunch"> <span class="select-none">lunch</span> <button type="submit" class="btn btn-xs btn-ghost">X</button></form></div><div class="badge badge-outline p-3 pr-0"><form class="inline-flex" hx-delete="/recipes/categories" hx-target="closest <div/>" hx-swap="delete"><input type="hidden" name="category" value="dinner"> <span class="select-none">dinner</span> <button type="submit" class="btn btn-xs btn-ghost">X</button></form></div><div class="badge badge-outline p-3 pr-0"><form class="inline-flex" hx-post="/recipes/categories" hx-target="closest <div/>" hx-swap="outerHTML"><label class="form-control"><input required type="text" placeholder="New category" class="input input-ghost input-xs w-[16ch] focus:outline-none" name="category" autocomplete="off"></label> <button class="btn btn-xs btn-ghost">&#10003;</button></form></div></div></details></div><div class="divider m-0"></div><div class="flex justify-between items-center text-sm"><label for="settings_recipes_measurement_system" class="font-semibold">Measurement system</label> <select id="settings_recipes_measurement_system" name="system" class="w-fit select select-bordered select-sm" hx-post="/settings/measurement-system" hx-swap="none"><option value="imperial">imperial</option><option value="metric" selected>metric</option></select></div><div class="flex justify-between items-center text-sm mt-2"><label for="settings_recipes_convert"><span class="font-semibold">Convert automatically</span><br><span class="text-xs">Convert new recipes to your preferred measurement system.</span></label> <input type="checkbox" name="convert" id="settings_recipes_convert" class="checkbox" hx-post="/settings/convert-automatically" hx-trigger="click"></div><div class="divider m-0"></div><div class="flex justify-between items-center text-sm mt-2"><label for="settings_recipes_calc_nutrition"><span class="font-semibold">Calculate nutrition facts</span><br><span class="text-xs block max-w-[45ch]">Calculate the nutrition facts automatically when adding a recipe. The processing will be done in the background.</span></label> <input id="settings_recipes_calc_nutrition" type="checkbox" name="calculate-nutrition" class="checkbox" hx-post="/settings/calculate-nutrition" hx-trigger="click"></div><div class="divider m-0"></div><div class="flex justify-between items-center text-sm"><details class="w-full"><summary class="font-semibold cursor-default">Placeholders</summary><div class="flex flex-wrap gap-2 p-2 flex-row"><div class="max-w-60"><p class="text-center mb-1 font-medium underline">Recipe</p><form hx-post="/placeholder" hx-encoding="multipart/form-data" hx-swap="none" _="on htmx:afterRequest call reloadImg('/data/images/Placeholders/placeholder.recipe.webp')"><img src="/data/images/Placeholders/placeholder.recipe.webp" alt="Recipe placeholder" class="w-60 h-60"> <input type="hidden" name="name" value="recipe"> <input type="file" name="images" class="file-input file-input-bordered file-input-sm max-w-60 mt-1"> <button class="btn btn-neutral btn-sm btn-block my-1">Update</button></form><button class="btn btn-error btn-sm btn-block" hx-post="/placeholder/restore" hx-vals='js:{t: "recipe"}' hx-swap="none" _="on htmx:afterRequest call reloadImg('/data/images/Placeholders/placeholder.recipe.webp')">Restore original</button></div><div class="max-w-60"><p class="text-center mb-1 font-medium underline">Cookbook</p><form hx-post="/placeholder" hx-encoding="multipart/form-data" hx-swap="none" _="on htmx:afterRequest call reloadImg('/data/images/Placeholders/placeholder.cookbook.webp')"><img src="/data/images/Placeholders/placeholder.cookbook.webp" alt="Cookbook placeholder" class="w-60 h-60"> <input type="hidden" name="name" value="cookbook"> <input type="file" name="images" class="file-input file-input-bordered file-input-sm max-w-60 mt-1"> <button class="btn btn-neutral btn-sm btn-block my-1">Update</button></form><button class="btn btn-error btn-sm btn-block" hx-post="/placeholder/restore" hx-vals='js:{name: "cookbook"}' hx-swap="none" _="on htmx:afterRequest call reloadImg('/data/images/Placeholders/placeholder.cookbook.webp')">Restore original</button></div></div></details></div>`,
+			`<div id="settings_recipes" class="p-3 md:p-0 md:pr-4 md:max-h-96 overflow-y-auto">`,
+			`<label for="settings_recipes_measurement_system" class="font-semibold">Measurement system</label>`,
+			`<select id="settings_recipes_measurement_system" name="system" class="w-fit select select-bordered select-sm" hx-post="/settings/measurement-system" hx-swap="none"><option value="imperial">imperial</option><option value="metric" selected>metric</option></select>`,
+			`<label for="settings_recipes_language"><span class="font-semibold">Recipe language</span><br><span class="text-xs block max-w-[45ch]">Used to detect and translate ingredients for nutrition lookup.</span></label>`,
+			`<select id="settings_recipes_language" name="recipe-language" class="w-fit select select-bordered select-sm" hx-post="/settings/recipe-language" hx-swap="none"><option value="auto" selected>Auto</option><option value="en">English</option><option value="it">Italian</option></select>`,
+			`<label for="settings_recipes_calc_nutrition"><span class="font-semibold">Calculate nutrition facts</span>`,
 			`<div id="settings_connections" class="p-3 overflow-y-auto max-h-96 hidden md:p-0 md:pr-4"><div class="flex justify-between items-center text-sm"><details class="w-full"><summary class="font-semibold cursor-default">SMTP Server<br><span class="text-xs font-normal">This connection is used to send emails.</span></summary><form class="grid w-full" hx-put="/settings/config" hx-swap="none"><label class="form-control w-full"><span class="label"><span class="label-text text-sm">From</span></span> <input name="email.from" type="text" placeholder="SMTP email" value="" autocomplete="off" class="input input-bordered input-sm w-full"></label> <label class="form-control w-full"><span class="label"><span class="label-text text-sm">SMTP Host</span></span> <input name="email.host" type="text" placeholder="smtp.gmail.com" value="" autocomplete="off" class="input input-bordered input-sm w-full"></label> <label class="form-control w-full"><span class="label"><span class="label-text text-sm">SMTP Username</span></span> <input name="email.username" type="text" placeholder="email@example.com" value="" autocomplete="off" class="input input-bordered input-sm w-full"></label> <label class="form-control w-full"><span class="label"><span class="label-text text-sm">SMTP Password</span></span> <input name="email.password" type="password" placeholder="SMTP password or app password" value="" autocomplete="off" class="input input-bordered input-sm w-full"></label> <button class="btn btn-sm mt-2">Update</button></form></details> <button type="button" title="Test connection" class="btn btn-xs float-right self-baseline" hx-get="/integrations/test-connection?api=smtp" hx-swap="none"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"></path></svg></button></div><div class="divider m-0"></div><div class="flex justify-between items-center text-sm"><details class="w-full"><summary class="font-semibold cursor-default">Azure AI Document Intelligence<br><span class="text-xs font-normal">This connection is used to digitize recipe images.</span></summary><form class="grid w-full" hx-put="/settings/config" hx-swap="none"><label class="form-control w-full"><span class="label"><span class="label-text text-sm">Resource key</span></span> <input name="integrations.ocr.key" type="text" placeholder="Resource key 1" value="" autocomplete="off" class="input input-bordered input-sm w-full"></label> <label class="form-control w-full"><span class="label"><span class="label-text text-sm">Endpoint</span></span> <input name="integrations.ocr.url" type="url" placeholder="Vision endpoint URL" value="" autocomplete="off" class="input input-bordered input-sm w-full"></label> <button class="btn btn-sm mt-2">Update</button></form></details> <button type="button" title="Test connection" class="btn btn-xs float-right self-baseline" hx-get="/integrations/test-connection?api=azure-di" hx-swap="none"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"></path></svg></button></div>`,
 			`<div id="settings_server" class="hidden p-3 md:p-0 md:pr-4 md:max-h-96"><div class="flex justify-between items-center text-sm"><form class="grid w-full" hx-put="/settings/config" hx-swap="none"><p class="font-semibold">Configuration</p><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Autologin</span> <input name="server.autologin" type="checkbox" class="checkbox"></label></div><div class="form-control"><label class="label cursor-pointer"><span class="label-text">No signups</span> <input name="server.noSignups" type="checkbox" class="checkbox"></label></div><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Is production</span> <input name="server.production" type="checkbox" class="checkbox"></label></div><button class="btn btn-sm mt-2">Update</button></form></div></div>`,
 			`<div id="settings_data" class="hidden p-3 md:p-0 md:pr-4"><div class="flex justify-between items-center text-sm"><details class="w-full"><summary class="font-semibold cursor-default">Import data<br><span class="text-xs font-normal">Import from Mealie, Tandoor, Nextcloud, etc.</span></summary><form class="flex flex-col text-sm" hx-post="/integrations/import" hx-swap="none"><label class="form-control w-full"><span class="label"><span class="label-text text-sm">Solution</span></span> <select name="integration" class="w-fit select select-bordered select-sm"><option value="mealie" selected>Mealie</option> <option value="nextcloud">Nextcloud</option> <option value="tandoor">Tandoor</option></select></label> <label class="form-control w-full"><span class="label"><span class="label-text text-sm">Base URL</span></span> <input type="url" name="url" placeholder="https://instance.mydomain.com" class="input input-bordered input-sm w-full" required></label> <label class="form-control w-full"><span class="label"><span class="label-text text-sm">Username</span></span> <input type="text" name="username" placeholder="Enter your username" class="input input-bordered input-sm w-full" required></label> <label class="form-control w-full"><span class="label"><span class="label-text text-sm">Password</span></span> <input type="password" name="password" placeholder="Enter your password" class="input input-bordered input-sm w-full" required></label> <button class="btn btn-sm mt-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-cloud-arrow-down" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M7.646 10.854a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0-.708-.708L8.5 9.293V5.5a.5.5 0 0 0-1 0v3.793L6.354 8.146a.5.5 0 1 0-.708.708l2 2z"></path> <path d="M4.406 3.342A5.53 5.53 0 0 1 8 2c2.69 0 4.923 2 5.166 4.579C14.758 6.804 16 8.137 16 9.773 16 11.569 14.502 13 12.687 13H3.781C1.708 13 0 11.366 0 9.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383zm.653.757c-.757.653-1.153 1.44-1.153 2.056v.448l-.445.049C2.064 6.805 1 7.952 1 9.318 1 10.785 2.23 12 3.781 12h8.906C13.98 12 15 10.988 15 9.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 4.825 10.328 3 8 3a4.53 4.53 0 0 0-2.941 1.1z"></path></svg>Import</button></form></details></div><div class="divider m-0"></div><div class="flex justify-between items-center text-sm"><div><p class="font-semibold">Export data</p><p class="text-xs">Download your data in the selected file format.</p></div><form class="grid gap-1 grid-flow-col w-fit" hx-get="/settings/export/recipes" hx-include="select[name='type']" hx-swap="none"><label class="form-control w-full max-w-xs"><select required id="file-type" name="type" class="w-fit select select-bordered select-sm"><optgroup label="Recipes"><option value="json" selected>JSON</option> <option value="pdf">PDF</option></optgroup></select></label> <button class="btn btn-outline btn-sm"><svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 ml-1" fill="black" viewBox="0 0 24 24" stroke="currentColor"><path d="M16 11v5H2v-5H0v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5z"></path> <path d="m9 14 5-6h-4V0H8v8H4z"></path></svg></button></form></div></div>`,
@@ -424,6 +431,139 @@ func TestHandlers_Settings_ConvertAutomatically(t *testing.T) {
 		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("convert=on"))
 
 		assertStatus(t, rr.Code, http.StatusNoContent)
+	})
+}
+
+func TestHandlers_Settings_RecipeLanguage(t *testing.T) {
+	srv, ts, c := createWSServer()
+	defer c.CloseNow()
+
+	srv.Repository = &mockRepository{
+		UserSettingsRegistered: map[int64]*models.UserSettings{
+			1: {RecipeLanguage: "auto"},
+		},
+	}
+
+	uri := ts.URL + "/settings/recipe-language"
+	originalRepo := srv.Repository
+
+	t.Run("must be logged in", func(t *testing.T) {
+		assertMustBeLoggedIn(t, srv, http.MethodPost, uri)
+	})
+
+	t.Run("language does not exist", func(t *testing.T) {
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("recipe-language=fr"))
+
+		assertStatus(t, rr.Code, http.StatusBadRequest)
+		assertWebsocket(t, c, 1, `{"type":"toast","fileName":"","data":"","toast":{"action":"","background":"alert-error","message":"Recipe language does not exist.","title":"Form Error"}}`)
+	})
+
+	t.Run("error updating the setting", func(t *testing.T) {
+		srv.Repository = &mockRepository{
+			UpdateRecipeLanguageFunc: func(_ int64, _ string) error {
+				return errors.New("language went sideways")
+			},
+		}
+		defer func() {
+			srv.Repository = originalRepo
+		}()
+
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("recipe-language=it"))
+
+		assertStatus(t, rr.Code, http.StatusInternalServerError)
+		assertWebsocket(t, c, 1, `{"type":"toast","fileName":"","data":"","toast":{"action":"","background":"alert-error","message":"Failed to set setting.","title":"Database Error"}}`)
+	})
+
+	t.Run("updates the setting", func(t *testing.T) {
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("recipe-language=it"))
+
+		assertStatus(t, rr.Code, http.StatusNoContent)
+		got := srv.Repository.(*mockRepository).UserSettingsRegistered[1].RecipeLanguage
+		if got != "it" {
+			t.Fatalf("RecipeLanguage = %q, want %q", got, "it")
+		}
+	})
+}
+
+func TestHandlers_Settings_RecipesBulkLanguage(t *testing.T) {
+	srv, ts, c := createWSServer()
+	defer c.CloseNow()
+
+	uri := ts.URL + "/settings/recipes/bulk-language"
+	originalRepo := srv.Repository
+
+	t.Run("must be logged in", func(t *testing.T) {
+		assertMustBeLoggedIn(t, srv, http.MethodPost, uri)
+	})
+
+	t.Run("language does not exist", func(t *testing.T) {
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("language=fr"))
+
+		assertStatus(t, rr.Code, http.StatusBadRequest)
+		assertWebsocket(t, c, 1, `{"type":"toast","fileName":"","data":"","toast":{"action":"","background":"alert-error","message":"Recipe language does not exist.","title":"Form Error"}}`)
+	})
+
+	t.Run("updates all recipe languages without refresh", func(t *testing.T) {
+		srv.Repository = &mockRepository{
+			RecipesRegistered: map[int64]models.Recipes{
+				1: {{ID: 1, Name: "One", Language: "en"}, {ID: 2, Name: "Two", Language: "en"}},
+			},
+		}
+		defer func() { srv.Repository = originalRepo }()
+
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("language=it"))
+
+		assertStatus(t, rr.Code, http.StatusNoContent)
+		for _, recipe := range srv.Repository.(*mockRepository).RecipesRegistered[1] {
+			if recipe.Language != "it" {
+				t.Fatalf("recipe %d Language = %q, want it", recipe.ID, recipe.Language)
+			}
+		}
+		assertWebsocket(t, c, 1, `{"type":"toast","fileName":"","data":"","toast":{"action":"","background":"alert-info","message":"Updated language for 2 recipes.","title":"Operation Successful"}}`)
+	})
+
+	t.Run("updates selected recipes and refreshes nutrition", func(t *testing.T) {
+		recalculated := make(chan []int64, 1)
+		srv.Repository = &mockRepository{
+			RecipesRegistered: map[int64]models.Recipes{
+				1: {{ID: 1, Name: "One", Language: "en"}, {ID: 2, Name: "Two", Language: "en"}},
+			},
+			RecalculateNutritionFunc: func(_ int64, recipeIDs []int64, progress chan models.Progress) []models.ReportLog {
+				for i := range recipeIDs {
+					progress <- models.Progress{Value: i + 1, Total: len(recipeIDs)}
+				}
+				recalculated <- recipeIDs
+				return nil
+			},
+		}
+		defer func() { srv.Repository = originalRepo }()
+
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("language=it&refresh-nutrition=on&recipe-id=2"))
+
+		assertStatus(t, rr.Code, http.StatusAccepted)
+		select {
+		case ids := <-recalculated:
+			if diff := cmp.Diff([]int64{2}, ids); diff != "" {
+				t.Fatalf("recalculated ids mismatch (-want +got):\n%s", diff)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for background nutrition refresh")
+		}
+		assertWebsocket(t, c, 4, `{"type":"toast","fileName":"","data":"","toast":{"action":"","background":"alert-info","message":"Updated language and refreshed nutrition for 1 recipes.","title":"Operation Successful"}}`)
+	})
+
+	t.Run("returns error when update fails", func(t *testing.T) {
+		srv.Repository = &mockRepository{
+			BulkUpdateRecipeLanguageFunc: func(_ int64, _ []int64, _ language.Code) ([]int64, error) {
+				return nil, errors.New("bulk language failed")
+			},
+		}
+		defer func() { srv.Repository = originalRepo }()
+
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("language=it"))
+
+		assertStatus(t, rr.Code, http.StatusInternalServerError)
+		assertWebsocket(t, c, 1, `{"type":"toast","fileName":"","data":"","toast":{"action":"","background":"alert-error","message":"Failed to update recipe languages.","title":"Database Error"}}`)
 	})
 }
 

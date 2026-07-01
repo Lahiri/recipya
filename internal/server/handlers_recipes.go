@@ -773,6 +773,7 @@ func (s *Server) recipesEditPutHandler() http.HandlerFunc {
 			Ingredients:  make([]string, 0),
 			Instructions: make([]string, 0),
 			Keywords:     make([]string, 0),
+			Language:     r.FormValue("language"),
 			Name:         r.FormValue("title"),
 			Nutrition: models.Nutrition{
 				Calories:           r.FormValue("calories"),

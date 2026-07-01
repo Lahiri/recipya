@@ -172,6 +172,8 @@ func (s *Server) mountHandlers() {
 	mux.Handle("PUT /settings/config", withLog(s.onlyAdminMiddleware(s.settingsConfigPutHandler())))
 	mux.Handle("POST /settings/convert-automatically", withLog(s.settingsConvertAutomaticallyPostHandler()))
 	mux.Handle("POST /settings/measurement-system", withLog(s.settingsMeasurementSystemsPostHandler()))
+	mux.Handle("POST /settings/recipes/bulk-language", withLog(s.settingsRecipesBulkLanguagePostHandler()))
+	mux.Handle("POST /settings/recipe-language", withLog(s.settingsRecipeLanguagePostHandler()))
 	mux.Handle("POST /settings/backups/restore", withLog(s.settingsBackupsRestoreHandler()))
 
 	// Share routes

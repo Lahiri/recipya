@@ -2,14 +2,17 @@ package server
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/reaper47/recipya/internal/app"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/templates"
 	"github.com/reaper47/recipya/internal/units"
@@ -142,6 +145,104 @@ func (s *Server) settingsCalculateNutritionPostHandler() http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func (s *Server) settingsRecipesBulkLanguagePostHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := getUserID(r)
+		userIDAttr := slog.Int64("userID", userID)
+
+		lang, ok := language.Parse(r.FormValue("language"))
+		if !ok || !language.IsRecipeLanguage(lang) {
+			msg := "Recipe language does not exist."
+			s.Brokers.SendToast(models.NewErrorFormToast(msg), userID)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		recipeIDs, err := parseBulkRecipeIDs(r.Form["recipe-id"])
+		if err != nil {
+			msg := "Invalid recipe selected."
+			slog.Error(msg, userIDAttr, "error", err)
+			s.Brokers.SendToast(models.NewErrorFormToast(msg), userID)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		refreshNutrition := r.FormValue("refresh-nutrition") == "on"
+		if refreshNutrition && !s.Brokers.Has(userID) {
+			w.Header().Set("HX-Trigger", models.NewWarningWSToast("Connection lost. Please reload page.").Render())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		updatedIDs, err := s.Repository.BulkUpdateRecipeLanguage(userID, recipeIDs, lang)
+		if err != nil {
+			msg := "Failed to update recipe languages."
+			slog.Error(msg, userIDAttr, "error", err)
+			s.Brokers.SendToast(models.NewErrorDBToast(msg), userID)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if len(updatedIDs) == 0 {
+			s.Brokers.SendToast(models.NewWarningToast("No recipes updated.", "", ""), userID)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if !refreshNutrition {
+			s.Brokers.SendToast(models.NewInfoToast("Operation Successful", fmt.Sprintf("Updated language for %d recipes.", len(updatedIDs)), ""), userID)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		go s.refreshNutritionInBackground(userID, updatedIDs)
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func parseBulkRecipeIDs(values []string) ([]int64, error) {
+	ids := make([]int64, 0, len(values))
+	for _, value := range values {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || id < 1 {
+			return nil, fmt.Errorf("invalid recipe id %q", value)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func (s *Server) refreshNutritionInBackground(userID int64, recipeIDs []int64) {
+	userIDAttr := slog.Int64("userID", userID)
+	now := time.Now()
+	total := len(recipeIDs)
+
+	s.Brokers.SendProgressStatus("Preparing nutrition refresh...", true, 0, total, userID)
+	progress := make(chan models.Progress)
+	var logs []models.ReportLog
+
+	go func() {
+		defer close(progress)
+		logs = s.Repository.RecalculateNutrition(userID, recipeIDs, progress)
+	}()
+
+	for p := range progress {
+		s.Brokers.SendProgress(fmt.Sprintf("Refreshing nutrition %d/%d", p.Value, p.Total), p.Value, p.Total, userID)
+	}
+
+	s.Brokers.HideNotification(userID)
+	failed := len(logs)
+	succeeded := total - failed
+	if failed > 0 {
+		slog.Warn("Bulk nutrition refresh completed with failures", userIDAttr, "total", total, "succeeded", succeeded, "failed", failed, "duration", time.Since(now))
+		s.Brokers.SendToast(models.NewWarningToast("Nutrition refresh completed", fmt.Sprintf("Refreshed %d recipes. %d failed; check server logs for details.", succeeded, failed), ""), userID)
+		return
+	}
+
+	slog.Info("Bulk nutrition refresh completed", userIDAttr, "total", total, "duration", time.Since(now))
+	s.Brokers.SendToast(models.NewInfoToast("Operation Successful", fmt.Sprintf("Updated language and refreshed nutrition for %d recipes.", total), ""), userID)
 }
 
 func (s *Server) settingsConfigPutHandler() http.HandlerFunc {
@@ -324,6 +425,31 @@ func (s *Server) settingsMeasurementSystemsPostHandler() http.HandlerFunc {
 		}
 
 		slog.Info("Switched measurement system", "from", settings.MeasurementSystem, "to", system)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) settingsRecipeLanguagePostHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := getUserID(r)
+		lang, ok := language.Parse(r.FormValue("recipe-language"))
+		if !ok {
+			msg := "Recipe language does not exist."
+			slog.Error(msg, "userID", userID, "language", r.FormValue("recipe-language"))
+			s.Brokers.SendToast(models.NewErrorFormToast(msg), userID)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		err := s.Repository.UpdateRecipeLanguage(userID, string(lang))
+		if err != nil {
+			msg := "Failed to set setting."
+			slog.Error(msg, "userID", userID, "language", lang, "error", err)
+			s.Brokers.SendToast(models.NewErrorDBToast(msg), userID)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

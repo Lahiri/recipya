@@ -17,6 +17,7 @@ import (
 	"github.com/donna-legal/word2number"
 	"github.com/google/uuid"
 	"github.com/reaper47/recipya/internal/app"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/units"
 	"github.com/reaper47/recipya/internal/utils/duration"
 	"github.com/reaper47/recipya/internal/utils/extensions"
@@ -70,6 +71,7 @@ type Recipe struct {
 	Ingredients  []string      `toml:"-"`
 	Instructions []string      `toml:"-"`
 	Keywords     []string      `toml:"-"`
+	Language     string        `toml:"-"`
 	Name         string        `toml:"name"`
 	Nutrition    Nutrition     `toml:"-"`
 	Times        Times         `toml:"-"`
@@ -146,6 +148,7 @@ func (r *Recipe) Copy() Recipe {
 		Ingredients:  ingredients,
 		Instructions: instructions,
 		Keywords:     keywords,
+		Language:     r.Language,
 		Name:         r.Name,
 		Nutrition: Nutrition{
 			Calories:           r.Nutrition.Calories,
@@ -173,11 +176,16 @@ func (r *Recipe) Copy() Recipe {
 	}
 }
 
+// SetDefaults fills empty recipe fields that have application-level defaults.
+func (r *Recipe) SetDefaults() {
+	r.Language = string(language.NormalizeRecipe(r.Language))
+}
+
 // IsEmpty verifies whether all the Recipe fields are empty.
 func (r *Recipe) IsEmpty() bool {
 	return r.Category == "" && r.CreatedAt.Equal(time.Time{}) && r.Cuisine == "" && r.Description == "" &&
 		r.ID == 0 && len(r.Images) == 0 && len(r.Ingredients) == 0 && len(r.Instructions) == 0 &&
-		len(r.Keywords) == 0 && r.Name == "" && r.Nutrition.Equal(Nutrition{}) &&
+		len(r.Keywords) == 0 && (r.Language == "" || r.Language == string(language.English)) && r.Name == "" && r.Nutrition.Equal(Nutrition{}) &&
 		r.Times.Equal(Times{}) && len(r.Tools) == 0 && r.UpdatedAt.Equal(time.Time{}) &&
 		r.URL == "" && r.Yield == 0
 }

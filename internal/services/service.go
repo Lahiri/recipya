@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-github/v59/github"
 	"github.com/google/uuid"
 	"github.com/reaper47/recipya/internal/auth"
+	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/templates"
 	"github.com/reaper47/recipya/internal/units"
@@ -32,6 +33,10 @@ type RepositoryService interface {
 
 	// AddRecipes adds recipes to the user's collection.
 	AddRecipes(recipes models.Recipes, userID int64, progress chan models.Progress) ([]int64, []models.ReportLog, error)
+
+	// BulkUpdateRecipeLanguage updates the language of many recipes belonging to a user.
+	// If recipeIDs is empty, all of the user's recipes are updated.
+	BulkUpdateRecipeLanguage(userID int64, recipeIDs []int64, lang language.Code) ([]int64, error)
 
 	// AddReport adds a report to the database.
 	AddReport(report models.Report, userID int64)
@@ -115,7 +120,7 @@ type RepositoryService interface {
 	Media() (images, videos []string)
 
 	// Nutrients gets the nutrients for the ingredients from the FDC database, along with the total weight.
-	Nutrients(ingredients []string) (models.NutrientsFDC, float64, error)
+	Nutrients(ingredients []string, sourceLanguage language.Code) (models.NutrientsFDC, float64, error)
 
 	// Recipe gets the user's recipe of the given id.
 	Recipe(id, userID int64) (*models.Recipe, error)
@@ -128,6 +133,9 @@ type RepositoryService interface {
 
 	// RecipesAll gets all the user's recipes.
 	RecipesAll(userID int64) models.Recipes
+
+	// RecalculateNutrition recalculates nutrition for the given recipes and reports progress after each recipe.
+	RecalculateNutrition(userID int64, recipeIDs []int64, progress chan models.Progress) []models.ReportLog
 
 	// RecipeShared checks whether the recipe is shared.
 	// It returns a models.Share. Otherwise, an error.
@@ -175,6 +183,9 @@ type RepositoryService interface {
 
 	// UpdateRecipe updates the recipe with its new values.
 	UpdateRecipe(updatedRecipe *models.Recipe, userID int64, recipeNum int64) error
+
+	// UpdateRecipeLanguage updates the user's default recipe language setting.
+	UpdateRecipeLanguage(userID int64, lang string) error
 
 	// UpdateUserSettingsCookbooksViewMode updates the user's preferred cookbooks viewing mode.
 	UpdateUserSettingsCookbooksViewMode(userID int64, mode models.ViewMode) error

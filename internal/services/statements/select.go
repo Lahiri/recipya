@@ -257,7 +257,8 @@ const SelectMeasurementSystems = `
 		   COALESCE((SELECT GROUP_CONCAT(name)
 					 FROM measurement_systems), '') AS systems,
 		   us.convert_automatically,
-		   us.calculate_nutrition
+		   us.calculate_nutrition,
+		   us.recipe_language
 	FROM measurement_systems AS ms
 			 JOIN user_settings AS us ON measurement_system_id = ms.id
 	WHERE user_id = ?`
@@ -291,6 +292,7 @@ const baseSelectRecipe = `
 	SELECT recipes.id                               AS recipe_id,
 		   recipes.name                             AS name,
 		   recipes.description                      AS description,
+		   recipes.language                         AS language,
 		   recipes.image                            AS image,
 		   COALESCE((SELECT GROUP_CONCAT(other_image, ';')
 					 FROM (SELECT image AS other_image
@@ -485,7 +487,7 @@ const SelectUserID = `
 
 // SelectUserSettings fetchs a user's settings.
 const SelectUserSettings = `
-	SELECT MS.name, convert_automatically, cookbooks_view, calculate_nutrition
+	SELECT MS.name, convert_automatically, cookbooks_view, calculate_nutrition, recipe_language
 	FROM user_settings
 	JOIN measurement_systems MS on MS.id = measurement_system_id
 	WHERE user_id = ?`

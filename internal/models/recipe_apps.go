@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	"github.com/google/uuid"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 )
 
 type cookML struct {
