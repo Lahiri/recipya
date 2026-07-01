@@ -230,3 +230,17 @@ func TestAzureDI_PrepareRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigTranslation_ResolvedAPIKey(t *testing.T) {
+	t.Setenv("RECIPYA_DEEPL_API_KEY", "from-env")
+
+	c := app.ConfigTranslation{APIKey: "from-config", APIKeyEnv: "RECIPYA_DEEPL_API_KEY"}
+	if got := c.ResolvedAPIKey(); got != "from-env" {
+		t.Fatalf("ResolvedAPIKey() = %q, want env key", got)
+	}
+
+	c.APIKeyEnv = "MISSING_DEEPL_API_KEY"
+	if got := c.ResolvedAPIKey(); got != "from-config" {
+		t.Fatalf("ResolvedAPIKey() = %q, want config key fallback", got)
+	}
+}

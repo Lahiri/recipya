@@ -2,16 +2,17 @@ package templates
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/blang/semver"
 	"github.com/google/uuid"
 	"github.com/reaper47/recipya/internal/app"
 	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/units"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 // Data holds data to pass on to the templates.

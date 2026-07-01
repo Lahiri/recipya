@@ -3,7 +3,6 @@ package components
 import (
 	"fmt"
 	"github.com/reaper47/recipya/internal/app"
-	"github.com/reaper47/recipya/internal/language"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/templates"
 	"strconv"
@@ -1505,8 +1504,8 @@ templ editRecipe(data *templates.ViewRecipeData) {
 												<span class="label-text">Language</span>
 											</div>
 											<select name="language" class="select select-bordered select-sm md:w-28 lg:w-40 xl:w-44">
-												for _, option := range language.RecipeOptions() {
-													<option value={ string(option.Code) } selected?={ data.Recipe.Language == string(option.Code) }>{ option.Label }</option>
+												for _, option := range data.RecipeLanguageOptions {
+													<option value={ string(option.Code) } selected?={ data.RecipeLanguage == option.Code }>{ option.Label }</option>
 												}
 											</select>
 										</label>
@@ -2340,7 +2339,7 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 									<p class="text-center">
 										Language:
 										<br class="hidden md:block"/>
-										{ language.Label(language.NormalizeRecipe(data.Recipe.Language)) }
+										{ data.RecipeLanguageLabel }
 									</p>
 								</div>
 								<div class="flex items-center justify-center col-span-2 text-sm md:col-span-1 print:hidden">
