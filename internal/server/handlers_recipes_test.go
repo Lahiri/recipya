@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/reaper47/recipya/internal/app"
@@ -102,7 +103,11 @@ func TestHandlers_Recipes_New(t *testing.T) {
 				`<dialog id="supported_websites_dialog" class="modal"><div class="modal-box h-2/3"><form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form><h3 class="mb-1"><label><input type="search" placeholder="Search a website" class="input input-bordered input-sm w-11/12" _="on input show <tbody>tr/> in next <table/> when its textContent.toLowerCase() contains my value.toLowerCase()"></label></h3><div class="overflow-x-auto"><table class="table table-zebra table-sm"><thead><tr class="text-center"><th class="py-1">Number</th><th class="py-1">Website</th></tr></thead> <tbody id="search-results"></tbody></table></div></div></dialog>`,
 				`<dialog id="supported_apps_import_dialog" class="modal"><div class="modal-box h-2/3"><form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form><h3 class="mb-1"><label><input type="search" placeholder="Search an application" class="input input-bordered input-sm w-11/12" _="on input show <tbody>tr/> in next <table/> when its textContent.toLowerCase() contains my value.toLowerCase()"></label></h3><div class="overflow-x-auto"><table class="table table-zebra table-sm"><thead><tr class="text-center"><th class="py-1">Number</th><th class="py-1">Application</th></tr></thead> <tbody id="application-results"></tbody></table></div></div></dialog>`,
 				`<dialog id="add_ocr_dialog" class="modal"><div class="modal-box"><form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form><h3 class="font-bold text-lg">Scan Recipe</h3><form class="py-4" hx-post="/recipes/add/ocr" hx-encoding="multipart/form-data" hx-indicator="#fullscreen-loader" hx-swap="none" _="on submit add_ocr_dialog.close()"><div class="grid mb-4"><label for="add-ocr-files-input" class="text-sm font-medium mb-1">Select your recipe's images ordered by page or a recipe document in the PDF format.</label> <input id="add-ocr-files-input" type="file" name="files" accept=".jpg, .jpeg, .png, .bmp, .tiff, .heif, .pdf" multiple class="p-2 border border-gray-300 rounded-lg shadow focus:ring-2 focus:ring-purple-600 dark:bg-gray-900 dark:border-none"></div><button class="btn btn-block btn-primary btn-sm">Submit</button></form></div></dialog>`,
-				`<dialog id="import_recipes_dialog" class="modal"><div class="modal-box"><form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form><h3 class="font-bold text-lg">Import Recipes</h3><form class="py-4" hx-post="/recipes/add/import" enctype="multipart/form-data" hx-indicator="#fullscreen-loader" hx-swap="none"><div class="grid mb-4"><label for="import-dialog-file" class="text-sm font-semibold mb-1">Choose files in the .json, .txt, .zip or other application format.</label> <input id="import-dialog-file" type="file" name="files" accept=".cml,.crumb,.json,.mxp,.paprikarecipes,.txt,.zip" multiple class="p-2 border border-gray-300 rounded-lg shadow focus:ring-2 focus:ring-purple-600 dark:bg-gray-900 dark:border-none"></div><button type="submit" class="btn btn-block btn-primary btn-sm" onclick="import_recipes_dialog.close()">Submit</button></form></div></dialog>`,
+				`<dialog id="import_recipes_dialog" class="modal">`,
+				`<label for="import-dialog-file" class="text-sm font-semibold mb-1">Choose files in the .json, .txt, .zip or other application format.</label>`,
+				`id="import-dialog-keywords"`,
+				`name="keywords"`,
+				`name="cookbookId"`,
 			}
 			assertStringsInHTML(t, getBodyHTML(rr), want)
 		})
@@ -110,16 +115,22 @@ func TestHandlers_Recipes_New(t *testing.T) {
 }
 
 func TestHandlers_Recipes_AddImport(t *testing.T) {
-	srv, ts, c := createWSServer()
-	defer c.CloseNow()
-
-	uri := ts.URL + "/recipes/add/import"
+	uriFactory := func() (srv *server.Server, ts *httptest.Server, c *websocket.Conn, uri string) {
+		srv, ts, c = createWSServer()
+		return srv, ts, c, ts.URL + "/recipes/add/import"
+	}
 
 	t.Run("must be logged in", func(t *testing.T) {
+		srv, ts, c, uri := uriFactory()
+		defer c.CloseNow()
+		defer ts.Close()
 		assertMustBeLoggedIn(t, srv, http.MethodPost, uri)
 	})
 
 	t.Run("payload too big", func(t *testing.T) {
+		srv, ts, c, uri := uriFactory()
+		defer c.CloseNow()
+		defer ts.Close()
 		b := bytes.NewBuffer(make([]byte, 130<<20))
 		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formData, strings.NewReader(b.String()))
 
@@ -128,6 +139,9 @@ func TestHandlers_Recipes_AddImport(t *testing.T) {
 	})
 
 	t.Run("error parsing files", func(t *testing.T) {
+		srv, ts, c, uri := uriFactory()
+		defer c.CloseNow()
+		defer ts.Close()
 		contentType, body := createMultipartForm(map[string][]string{"files": {"file1"}})
 		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, header(contentType), strings.NewReader(body))
 
@@ -136,10 +150,85 @@ func TestHandlers_Recipes_AddImport(t *testing.T) {
 	})
 
 	t.Run("valid request", func(t *testing.T) {
+		srv, ts, c, uri := uriFactory()
+		defer c.CloseNow()
+		defer ts.Close()
 		contentType, body := createMultipartForm(map[string][]string{"files": {"file1.jpg"}})
 		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, header(contentType), strings.NewReader(body))
 
 		assertStatus(t, rr.Code, http.StatusAccepted)
+	})
+
+	t.Run("merges default tags and links imported recipes to a cookbook", func(t *testing.T) {
+		srv, ts, c, uri := uriFactory()
+		defer c.CloseNow()
+		defer ts.Close()
+		originalFiles := srv.Files
+		repo := &mockRepository{
+			CookbooksRegistered: map[int64][]models.Cookbook{1: {{ID: 1, Title: "Test Cookbook"}}},
+			RecipesRegistered:   make(map[int64]models.Recipes),
+			Reports:             map[int64][]models.Report{1: {}},
+			UsersRegistered:     []models.User{{ID: 1, Email: "test@example.com"}},
+		}
+		srv.Files = &mockFiles{extractRecipesFunc: func(fileHeaders []*multipart.FileHeader) models.Recipes {
+			return models.Recipes{{Name: "Imported One"}, {Name: "Imported Two"}}
+		}}
+		defer func() {
+			srv.Files = originalFiles
+		}()
+		repo.AddRecipesFunc = func(recipes models.Recipes, userID int64, progress chan models.Progress) ([]int64, []models.ReportLog, error) {
+			for i := range recipes {
+				recipe := recipes[i]
+				recipe.ID = int64(i + 1)
+				recipe.Keywords = append(recipe.Keywords, "existing")
+				if repo.RecipesRegistered[userID] == nil {
+					repo.RecipesRegistered[userID] = make(models.Recipes, 0)
+				}
+				repo.RecipesRegistered[userID] = append(repo.RecipesRegistered[userID], recipe)
+			}
+			return []int64{1, 2}, nil, nil
+		}
+		srv.Repository = repo
+
+		contentType, body := createMultipartForm(map[string][]string{
+			"files":      {"file1.jpg"},
+			"cookbookId": {"1"},
+			"keywords":   {"breakfast, lunch"},
+		})
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, header(contentType), strings.NewReader(body))
+
+		assertStatus(t, rr.Code, http.StatusAccepted)
+
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if len(repo.RecipesRegistered[1]) == 2 && len(repo.CookbooksRegistered[1][0].Recipes) == 2 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		if len(repo.RecipesRegistered[1]) != 2 {
+			t.Fatalf("expected 2 imported recipes, got %d", len(repo.RecipesRegistered[1]))
+		}
+		if !slices.Contains(repo.RecipesRegistered[1][0].Keywords, "breakfast") || !slices.Contains(repo.RecipesRegistered[1][0].Keywords, "lunch") || !slices.Contains(repo.RecipesRegistered[1][0].Keywords, "existing") {
+			t.Fatalf("expected default tags to be merged into imported recipe keywords, got %v", repo.RecipesRegistered[1][0].Keywords)
+		}
+		if len(repo.CookbooksRegistered[1][0].Recipes) != 2 {
+			t.Fatalf("expected cookbook to contain 2 recipes after import, got %d", len(repo.CookbooksRegistered[1][0].Recipes))
+		}
+	})
+
+	t.Run("rejects invalid cookbook IDs", func(t *testing.T) {
+		srv, ts, c, uri := uriFactory()
+		defer c.CloseNow()
+		defer ts.Close()
+		repo := &mockRepository{CookbooksRegistered: map[int64][]models.Cookbook{1: {{ID: 1}}}, RecipesRegistered: make(map[int64]models.Recipes)}
+		srv.Repository = repo
+
+		contentType, body := createMultipartForm(map[string][]string{"files": {"file1.jpg"}, "cookbookId": {"not-a-number"}})
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, header(contentType), strings.NewReader(body))
+
+		assertStatus(t, rr.Code, http.StatusBadRequest)
 	})
 }
 
@@ -543,6 +632,30 @@ func TestHandlers_Recipes_AddWebsite(t *testing.T) {
 		}
 		if len(repo.RecipesRegistered[1]) != 1 {
 			t.Fatal("expected 3 recipes")
+		}
+	})
+
+	t.Run("links imported recipes to a cookbook when cookbookId is provided", func(t *testing.T) {
+		repo := &mockRepository{
+			CookbooksRegistered:    map[int64][]models.Cookbook{1: {{ID: 1, Title: "Test Cookbook"}}},
+			RecipesRegistered:      map[int64]models.Recipes{1: make(models.Recipes, 0)},
+			Reports:                map[int64][]models.Report{1: make([]models.Report, 0)},
+			UserSettingsRegistered: map[int64]*models.UserSettings{1: {}},
+		}
+		srv.Repository = repo
+		defer func() {
+			srv.Repository = originalRepo
+		}()
+
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri, formHeader, strings.NewReader("urls=https://www.example.com&cookbookId=1"))
+
+		assertStatus(t, rr.Code, http.StatusAccepted)
+		assertWebsocket(t, c, 4, `{"type":"toast","fileName":"","data":"","toast":{"action":"View /recipes/1","background":"alert-info","message":"Recipe has been added to your collection.","title":"Operation Successful"}}`)
+		if len(repo.RecipesRegistered[1]) != 1 {
+			t.Fatalf("expected 1 imported recipe, got %d", len(repo.RecipesRegistered[1]))
+		}
+		if len(repo.CookbooksRegistered[1][0].Recipes) != 1 {
+			t.Fatalf("expected cookbook to contain 1 recipe after import, got %d", len(repo.CookbooksRegistered[1][0].Recipes))
 		}
 	})
 
@@ -1415,7 +1528,11 @@ func TestHandlers_Recipes_Share(t *testing.T) {
 			`<time datetime="PT05M">5m</time></div><div class="flex justify-self-center items-center gap-1 cursor-default" title="Cooking time">`,
 			`<time datetime="PT1H05M">1h05m</time></div><div class="flex justify-self-center items-center gap-1 cursor-default" title="Total time">`,
 			`<time datetime="PT1H10M">1h10m</time></div></div>`,
-			`<table class="table table-zebra table-xs print:hidden"><thead><tr><th>Nutrition (per 100g)</th><th>Amount</th></tr></thead> <tbody><tr><td>Calories:</td><td>500 kcal</td></tr><tr><td>Total carbs:</td><td>7 g</td></tr><tr><td>Sugars:</td><td>6 g</td></tr><tr><td>Protein:</td><td>3 g</td></tr><tr><td>Total fat:</td><td>8 g</td></tr><tr><td>Saturated fat:</td><td>4 g</td></tr><tr><td>Unsaturated fat:</td><td>9 g</td></tr><tr><td>Trans fat:</td><td>10 g</td></tr><tr><td>Cholesterol:</td><td>1 mg</td></tr><tr><td>Sodium:</td><td>5 mg</td></tr><tr><td>Fiber:</td><td>2 g</td></tr></tbody></table>`,
+			`<table class="table table-zebra table-xs print:hidden">`,
+			`<span>Nutrition (per</span>`,
+			`<span>100g)</span>`,
+			`<td>Calories:</td>`,
+			`<td>500 kcal</td>`,
 			`<div id="ingredients-instructions-container" class="grid text-sm md:grid-flow-col md:col-span-6 print:grid print:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] print:gap-4 print:items-stretch print:my-0">`,
 			`<div class="recipe-print-bg-ingredients hidden print:block col-span-6 ml-2 my-1 print:col-span-1 print:m-0 print:bg-[#F7DFC2] print:p-3 print:rounded-md print:break-inside-avoid print:h-full"><div><h1 class="text-sm font-bold print:mb-1 print:border-b print:border-black print:pb-1 print:text-center">Ingredients</h1>`,
 			`<span>Ing1</span>`,
@@ -1810,6 +1927,7 @@ func TestHandlers_Recipes_View(t *testing.T) {
 				`<span class="text-center pb-2 print:block print:w-full print:pb-0 print:text-center print:text-3xl print:font-normal print:leading-tight print:uppercase" itemprop="name">Chicken Jersey</span>`,
 				`<button class="mr-2 hidden sm:block" title="Share recipe" hx-post="/recipes/1/share" hx-target="#share-dialog-result" _="on htmx:afterRequest from me if event.detail.successful if navigator.canShare set name to document.querySelector('[itemprop=name]').textContent then set data to {title: name, text: name, url: document.querySelector('#share-dialog-result input').value} then call navigator.share(data) else call share_dialog.showModal() end">`,
 				`<button class="mr-2 hidden sm:block" title="Print recipe" _="on click print()">`,
+				`<button type="button" class="btn btn-ghost btn-xs p-1" title="Refresh nutrition facts" hx-post="/recipes/1/nutrition/refresh" hx-target="#content" hx-swap="innerHTML transition:true">`,
 				`<button class="mr-2 hidden sm:block" hx-delete="/recipes/1" hx-swap="none" title="Delete recipe" hx-confirm="Are you sure you wish to delete this recipe?" hx-indicator="#fullscreen-loader">`,
 				`<img id="output" style="object-fit: cover" alt="Image of the recipe" class="w-full max-h-80 md:max-h-[34rem]" src="/data/images/Placeholders/placeholder.recipe.webp">`,
 				`<div class="badge badge-primary badge-outline">American</div>`,
@@ -1820,7 +1938,7 @@ func TestHandlers_Recipes_View(t *testing.T) {
 				`<textarea class="textarea w-full h-full resize-none" readonly>This is the most delicious recipe!</textarea>`,
 				`<p class="text-xs">Per 100g: calories 500 kcal; total carbohydrates 7 g; sugar 6 g; protein 3 g; total fat 8 g; saturated fat 4 g; unsaturated fat 9 g; trans fat 10 g; cholesterol 1 mg; sodium 5 mg; fiber 2 g</p>`,
 				`<div class="grid grid-flow-col border-gray-700 col-span-6 py-1 md:border-y md:grid-cols-3 md:row-span-1 print:hidden"><div class="flex justify-self-center items-center gap-1 cursor-default" title="Prep time">`,
-				`<table class="table table-zebra table-xs print:hidden"><thead><tr><th>Nutrition (per 100g)</th><th>Amount</th></tr></thead> <tbody><tr><td>Calories:</td><td>500 kcal</td></tr><tr><td>Total carbs:</td><td>7 g</td></tr><tr><td>Sugars:</td><td>6 g</td></tr><tr><td>Protein:</td><td>3 g</td></tr><tr><td>Total fat:</td><td>8 g</td></tr><tr><td>Saturated fat:</td><td>4 g</td></tr><tr><td>Unsaturated fat:</td><td>9 g</td></tr><tr><td>Trans fat:</td><td>10 g</td></tr><tr><td>Cholesterol:</td><td>1 mg</td></tr><tr><td>Sodium:</td><td>5 mg</td></tr><tr><td>Fiber:</td><td>2 g</td></tr></tbody></table>`,
+				`<table class="table table-zebra table-xs print:hidden"><thead><tr><th><div class="flex items-center gap-2"><button type="button" class="btn btn-ghost btn-xs p-1" title="Refresh nutrition facts" hx-post="/recipes/1/nutrition/refresh" hx-target="#content" hx-swap="innerHTML transition:true"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.2M20 20v-5h-.2M5.3 9a7 7 0 0 1 11.4-2.6L20 8m0 8a7 7 0 0 1-11.4 2.6L4 16"></path></svg></button> <span>Nutrition (per</span> <span>100g)</span></div></th><th>Amount</th></tr></thead> <tbody><tr><td>Calories:</td><td>500 kcal</td></tr><tr><td>Total carbs:</td><td>7 g</td></tr><tr><td>Sugars:</td><td>6 g</td></tr><tr><td>Protein:</td><td>3 g</td></tr><tr><td>Total fat:</td><td>8 g</td></tr><tr><td>Saturated fat:</td><td>4 g</td></tr><tr><td>Unsaturated fat:</td><td>9 g</td></tr><tr><td>Trans fat:</td><td>10 g</td></tr><tr><td>Cholesterol:</td><td>1 mg</td></tr><tr><td>Sodium:</td><td>5 mg</td></tr><tr><td>Fiber:</td><td>2 g</td></tr></tbody></table>`,
 			})
 		})
 	}

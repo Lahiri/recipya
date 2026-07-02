@@ -1,16 +1,17 @@
 package server
 
 import (
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/reaper47/recipya/internal/app"
 	"github.com/reaper47/recipya/internal/models"
 	"github.com/reaper47/recipya/internal/templates"
 	"github.com/reaper47/recipya/web/components"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	"log/slog"
-	"net/http"
-	"strconv"
-	"strings"
 )
 
 func (s *Server) cookbooksHandler() http.HandlerFunc {
@@ -436,7 +437,17 @@ func (s *Server) cookbookPostCookbookHandler() http.HandlerFunc {
 			return
 		}
 
+		err = r.ParseForm()
+		if err != nil {
+			s.Brokers.SendToast(models.NewErrorFormToast("Could not parse form."), userID)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		recipeIDStr := r.FormValue("recipeId")
+		if recipeIDStr == "" {
+			recipeIDStr = r.FormValue("recipe-id")
+		}
 		recipeID, err := strconv.ParseInt(recipeIDStr, 10, 64)
 		if err != nil {
 			s.Brokers.SendToast(models.NewErrorFormToast("Missing 'recipeId' in body."), userID)

@@ -123,6 +123,26 @@ func TestNormalizeIngredientsForNutritionUsesFallbackForDictionaryMiss(t *testin
 	}
 }
 
+func TestScaleNutritionForYield(t *testing.T) {
+	nutrition := models.Nutrition{
+		Calories:           "800 kcal",
+		TotalCarbohydrates: "40 g",
+		Protein:            "20 g",
+	}
+
+	got := scaleNutritionForYield(nutrition, 4)
+	want := models.Nutrition{
+		Calories:           "200 kcal",
+		TotalCarbohydrates: "10 g",
+		Protein:            "5 g",
+		IsPerServing:       true,
+	}
+
+	if got != want {
+		t.Fatalf("scaleNutritionForYield() = %+v, want %+v", got, want)
+	}
+}
+
 func TestNewIngredientProviderUsesConfiguredTranslationProvider(t *testing.T) {
 	tests := []struct {
 		name     string

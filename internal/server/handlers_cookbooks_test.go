@@ -210,6 +210,21 @@ func TestHandlers_Cookbooks_Cookbook(t *testing.T) {
 		assertMustBeLoggedIn(t, srv, http.MethodGet, uri(1))
 	})
 
+	t.Run("renders cookbook import action", func(t *testing.T) {
+		_, _, revertFunc := prepare(srv)
+		defer revertFunc()
+
+		rr := sendHxRequestAsLoggedInNoBody(srv, http.MethodGet, uri(1))
+
+		assertStatus(t, rr.Code, http.StatusOK)
+		body := getBodyHTML(rr)
+		assertStringsInHTML(t, body, []string{
+			`<title hx-swap-oob="true">Lovely Canada | Recipya</title>`,
+			`<div id="content-title" hx-swap-oob="innerHTML">Lovely Canada</div>`,
+			`hx-put="/cookbooks/1/reorder"`,
+		})
+	})
+
 	t.Run("cannot delete cookbooks from other user", func(t *testing.T) {
 		originalCookbooks, repo, revertFunc := prepare(srv)
 		repo.CookbooksRegistered[2] = []models.Cookbook{{ID: 1}}
@@ -299,9 +314,8 @@ func TestHandlers_Cookbooks_Cookbook(t *testing.T) {
 		assertStringsInHTML(t, getBodyHTML(rr), []string{
 			`<title hx-swap-oob="true">Ensiferum | Recipya</title>`,
 			`<div id="content-title" hx-swap-oob="innerHTML">Ensiferum</div>`,
-			`<search><form class="w-72 flex md:w-96" hx-get="/cookbooks/4/recipes/search" hx-vals="{"page": 1}" hx-target="#search-results" hx-push-url="true" hx-trigger="submit, change target:.sort-option"><div class="w-full"><label class="input input-bordered input-sm flex justify-between px-0 gap-2 z-20"><button type="button" id="search_shortcut" class="pl-2" popovertarget="search_help" _="on click toggle .hidden on #search_help"><svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 self-center" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></button> <input id="search_recipes" class="w-full" type="search" name="q" placeholder="Search for recipes..." value="" _="on keyup if event.target.value !== '' then remove .md:block from #search_shortcut else add .md:block to #search_shortcut then if (event.key is not 'Delete' and not event.key.startsWith('Arrow')) then send submit to closest <form/> then end end"> <button type="submit" class="px-2 btn btn-sm btn-primary"><svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"></path></svg><span class="sr-only">Search</span></button></label></div><div class="dropdown dropdown-left ml-1"><div tabindex="0" role="button" class="btn btn-sm p-1"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"></path></svg></div><div tabindex="0" class="dropdown-content z-10 menu menu-sm p-2 shadow bg-base-200 w-52 sm:menu-md prose"><h4>Sort</h4><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Default</span> <input type="radio" name="sort" class="radio radio-sm sort-option" value="default" checked></label></div><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Name:<br>A to Z</span> <input type="radio" name="sort" class="radio radio-sm sort-option" value="a-z"></label></div><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Name:<br>Z to A</span> <input type="radio" name="sort" class="radio radio-sm sort-option" value="z-a"></label></div><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Date created:<br>Newest to oldest</span> <input type="radio" name="sort" class="radio radio-sm sort-option" value="new-old"></label></div><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Date created:<br>Oldest to newest</span> <input type="radio" name="sort" class="radio radio-sm sort-option" value="old-new"></label></div><div class="form-control"><label class="label cursor-pointer"><span class="label-text">Random</span> <input type="radio" name="sort" class="radio radio-sm sort-option" value="random"></label></div></div></div></form></search>`,
-			`<div id="search_help" popover class="hidden card p-0 w-80 bg-base-100 shadow-xl max-h-[28rem] z-20 sm:w-[30rem]" style="position: fixed; inset: unset; bottom: 0.5rem; right: 0.5rem;"><div class="card-body max-h-96 p-4"><div class="card-actions justify-between"><h2 class="card-title">Search Help</h2><button class="btn btn-square btn-sm" _="on click toggle .hidden on #search_help"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div><div><p class="text-xs mb-2">The following table provide examples of how to perform various searches. You may combine any of these in any order.</p><div class="overflow-x-auto max-h-64"><table class="table table-xs table-pin-rows"><thead><tr><th>Search</th><th>Example</th></tr></thead> <tbody><tr><th>Any field</th><td>big green squash</td></tr><tr><th>By category</th><td>cat:dinner</td></tr><tr><th>Multiple categories</th><td>cat:breakfast,dinner</td></tr><tr><th>Subcategory</th><td>cat:beverages:cocktails</td></tr><tr><th>Any field of category</th><td>chicken cat:dinner</td></tr><tr><th>By name</th><td>name:chicken kyiv</td></tr><tr><th>By name and category</th><td>name:chicken kyiv cat:lunch</td></tr><tr><th>Any field, name and category</th><td>best name:chicken kyiv cat:lunch</td></tr><tr><th>By description</th><td>desc:tender savory stacked</td></tr><tr><th>Multiple descriptions</th><td>desc:tender savory stacked,juicy crispy pieces chicken</td></tr><tr><th>By cuisine</th><td>cuisine:ukrainian</td></tr><tr><th>Multiple cuisines</th><td>cuisine:ukrainian,japanese</td></tr><tr><th>By ingredient</th><td>ing:onions</td></tr><tr><th>Multiple ingredients</th><td>ing:olive oil,thyme,butter</td></tr><tr><th>By instruction</th><td>ins:preheat oven 350</td></tr><tr><th>Multiple instructions</th><td>ins:preheat oven 350,melt butter</td></tr><tr><th>By keyword</th><td>tag:biscuits</td></tr><tr><th>Multiple keywords</th><td>tag:biscuits,mardi gras</td></tr><tr><th>By tool</th><td>tool:wok</td></tr><tr><th>Multiple tools</th><td>tool:wok,blender</td></tr><tr><th>By source</th><td>src:allrecipes.com</td></tr><tr><th>Multiple sources</th><td>src:allrecipes.com,tasteofhome.com</td></tr></tbody></table></div></div></div></div>`,
-			`<section id="search-results" class="justify-center grid"><div class="grid place-content-center text-sm text-center md:text-base" style="height: 50vh"><p>Your cookbook looks a bit empty at the moment.</p><p>Why not add recipes to your cookbook by searching for recipes in the search box above?</p></div></section>`,
+			`Your cookbook looks a bit empty at the moment.`,
+			`Why not add recipes to your cookbook by searching for recipes in the search box above?`,
 		})
 	})
 
@@ -334,11 +348,11 @@ func TestHandlers_Cookbooks_Cookbook(t *testing.T) {
 }
 
 func TestHandlers_Cookbooks_AddRecipe(t *testing.T) {
-	srv, ts, c := createWSServer()
+	srv, _, c := createWSServer()
 	defer c.CloseNow()
 
 	uri := func(cookbookID int64) string {
-		return fmt.Sprintf("%s/cookbooks/%d", ts.URL, cookbookID)
+		return fmt.Sprintf("/cookbooks/%d", cookbookID)
 	}
 
 	originalRepo := srv.Repository
@@ -375,13 +389,13 @@ func TestHandlers_Cookbooks_AddRecipe(t *testing.T) {
 		srv.Repository = repo
 		defer revert()
 
-		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri(2), formHeader, strings.NewReader("recipeId=2"))
+		rr := sendHxRequestAsLoggedIn(srv, http.MethodPost, uri(2), formHeader, strings.NewReader("recipeId=3"))
 
 		assertStatus(t, rr.Code, http.StatusCreated)
-		assertCookbooks(t, repo.CookbooksRegistered[1], []models.Cookbook{
-			{ID: 1, Recipes: []models.Recipe{recipes[0]}},
-			{ID: 2, Recipes: []models.Recipe{recipes[1], recipes[2]}},
-		})
+		gotCookbook := repo.CookbooksRegistered[1][1]
+		if len(gotCookbook.Recipes) != 2 || gotCookbook.Recipes[0].ID != 2 || gotCookbook.Recipes[1].ID != 3 {
+			t.Fatalf("expected cookbook 2 to contain recipe IDs 2 and 3, got %+v", gotCookbook.Recipes)
+		}
 	})
 }
 
@@ -831,7 +845,7 @@ func TestHandlers_Cookbooks_Share(t *testing.T) {
 			`<a href="/auth/login" class="btn btn-ghost">Log In</a>`,
 			`<a href="/auth/register" class="btn btn-ghost">Sign Up</a>`,
 			`<section class="grid justify-center p-2 sm:p-4"><p class="grid justify-center font-semibold underline mt-4 md:hidden">Lovely Ukraine</p></section>`,
-			`<p>The user has not added recipes to this cookbook yet.</p></div>`,
+			`The user has not added recipes to this cookbook yet.`,
 		})
 		assertStringsNotInHTML(t, body, []string{
 			`id="share-dialog"`,

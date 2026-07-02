@@ -838,17 +838,29 @@ func (s *SQLiteService) recalculateNutritionForRecipe(userID, recipeID int64) (*
 
 // storeRecipeNutrition computes the recipe's nutrition facts from its ingredients and persists them.
 func (s *SQLiteService) storeRecipeNutrition(ctx context.Context, recipe *models.Recipe) error {
-	nutrients, weight, err := s.Nutrients(recipe.Ingredients, language.NormalizeRecipe(recipe.Language))
+	nutrients, _, err := s.Nutrients(recipe.Ingredients, language.NormalizeRecipe(recipe.Language))
 	if err != nil {
 		return err
 	}
 
-	n := nutrients.NutritionFact(weight)
+	n := nutrients.NutritionTotal()
+	n = scaleNutritionForYield(n, recipe.Yield)
 
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	_, err = s.DB.ExecContext(ctx, statements.UpdateNutrition, n.Calories, n.TotalCarbohydrates, n.Sugars, n.Protein, n.TotalFat, n.SaturatedFat, n.UnsaturatedFat, n.TransFat, n.Cholesterol, n.Sodium, n.Fiber, n.IsPerServing, recipe.ID)
 	return err
+}
+
+func scaleNutritionForYield(n models.Nutrition, yield int16) models.Nutrition {
+	if yield <= 1 {
+		n.IsPerServing = true
+		return n
+	}
+
+	n.Scale(1 / float64(yield))
+	n.IsPerServing = true
+	return n
 }
 
 // Categories gets all user categories from the database.

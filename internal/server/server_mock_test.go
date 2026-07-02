@@ -247,9 +247,11 @@ func (m *mockRepository) AddRecipeCategory(name string, userID int64) error {
 }
 
 func (m *mockRepository) AddReport(report models.Report, userID int64) {
-	_, ok := m.Reports[userID]
-	if !ok {
-		panic("reports for user not initialized")
+	if m.Reports == nil {
+		m.Reports = make(map[int64][]models.Report)
+	}
+	if _, ok := m.Reports[userID]; !ok {
+		m.Reports[userID] = make([]models.Report, 0)
 	}
 
 	m.Reports[userID] = append(m.Reports[userID], report)
@@ -315,6 +317,12 @@ func (m *mockRepository) AddCookbookRecipe(cookbookID, recipeID, userID int64) e
 		return errors.New("user recipes is nil")
 	}
 
+	if slices.ContainsFunc(cookbooks[cookbookIndex].Recipes, func(r models.Recipe) bool {
+		return r.ID == recipeID
+	}) {
+		return nil
+	}
+
 	recipeIndex := slices.IndexFunc(recipes, func(r models.Recipe) bool {
 		return r.ID == recipeID
 	})
@@ -322,7 +330,8 @@ func (m *mockRepository) AddCookbookRecipe(cookbookID, recipeID, userID int64) e
 		return errors.New("recipe not found")
 	}
 
-	cookbooks[cookbookIndex].Recipes = append(cookbooks[cookbookIndex].Recipes, recipes[recipeID])
+	cookbooks[cookbookIndex].Recipes = append(cookbooks[cookbookIndex].Recipes, recipes[recipeIndex])
+	m.CookbooksRegistered[userID] = cookbooks
 	return nil
 }
 

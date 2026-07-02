@@ -128,6 +128,32 @@ func (s *Server) recipesAddImportHandler() http.HandlerFunc {
 			return
 		}
 
+		cookbookIDStr := r.FormValue("cookbookId")
+		var cookbookID int64
+		if cookbookIDStr != "" {
+			parsed, convErr := strconv.ParseInt(cookbookIDStr, 10, 64)
+			if convErr != nil || parsed <= 0 {
+				s.Brokers.HideNotification(userID)
+				msg := "Cookbook ID is invalid."
+				slog.Error(msg, userIDAttr, "cookbookID", cookbookIDStr, "error", convErr)
+				s.Brokers.SendToast(models.NewErrorFormToast(msg), userID)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			cookbookID = parsed
+		}
+
+		keywords := make([]string, 0)
+		for _, value := range r.Form["keywords"] {
+			for _, token := range strings.Split(value, ",") {
+				token = strings.TrimSpace(token)
+				if token != "" {
+					keywords = append(keywords, token)
+				}
+			}
+		}
+		keywords = extensions.Unique(keywords)
+
 		go func() {
 			var (
 				progress  = make(chan models.Progress)
@@ -149,6 +175,10 @@ func (s *Server) recipesAddImportHandler() http.HandlerFunc {
 			go func() {
 				defer close(progress)
 
+				for i := range recipes {
+					recipes[i].Keywords = extensions.Unique(append(recipes[i].Keywords, keywords...))
+				}
+
 				recipeIDs, report.Logs, err = s.Repository.AddRecipes(recipes, userID, progress)
 				if err != nil {
 					slog.Error("Error adding recipes", userIDAttr, "recipes", recipes, "error", err)
@@ -165,14 +195,28 @@ func (s *Server) recipesAddImportHandler() http.HandlerFunc {
 
 			numSuccess := len(recipeIDs)
 			skipped := total - numSuccess
+			cookbookFailed := false
+			if cookbookID > 0 && numSuccess > 0 {
+				for _, recipeID := range recipeIDs {
+					err = s.Repository.AddCookbookRecipe(cookbookID, recipeID, userID)
+					if err != nil {
+						cookbookFailed = true
+						slog.Error("Failed to add imported recipe to cookbook", userIDAttr, "cookbookID", cookbookID, "recipeID", recipeID, "error", err)
+					}
+				}
+			}
 
 			redirect := "/reports?view=latest"
 			if numSuccess == 1 {
 				redirect = "/recipes/" + strconv.FormatInt(recipeIDs[0], 10)
 			}
 
-			slog.Info("Imported recipes", userIDAttr, "imported", numSuccess, "skipped", skipped, "total", total)
-			s.Brokers.SendToast(models.NewInfoToast("Operation Successful", fmt.Sprintf("Imported %d recipes. %d skipped", numSuccess, skipped), "View "+redirect), userID)
+			slog.Info("Imported recipes", userIDAttr, "imported", numSuccess, "skipped", skipped, "total", total, "cookbookID", cookbookID, "cookbookFailed", cookbookFailed)
+			if cookbookFailed {
+				s.Brokers.SendToast(models.NewWarningToast("Operation Successful", fmt.Sprintf("Imported %d recipes. %d skipped. Some recipes could not be added to the cookbook.", numSuccess, skipped), "View "+redirect), userID)
+			} else {
+				s.Brokers.SendToast(models.NewInfoToast("Operation Successful", fmt.Sprintf("Imported %d recipes. %d skipped", numSuccess, skipped), "View "+redirect), userID)
+			}
 		}()
 
 		w.WriteHeader(http.StatusAccepted)
@@ -539,6 +583,21 @@ func (s *Server) recipesAddWebsiteHandler() http.HandlerFunc {
 			return
 		}
 
+		cookbookIDStr := r.FormValue("cookbookId")
+		var cookbookID int64
+		if cookbookIDStr != "" {
+			parsed, convErr := strconv.ParseInt(cookbookIDStr, 10, 64)
+			if convErr != nil || parsed <= 0 {
+				s.Brokers.HideNotification(userID)
+				msg := "Cookbook ID is invalid."
+				slog.Error(msg, userIDAttr, "cookbookID", cookbookIDStr, "error", convErr)
+				s.Brokers.SendToast(models.NewErrorFormToast(msg), userID)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			cookbookID = parsed
+		}
+
 		urls := slices.DeleteFunc(strings.Split(r.FormValue("urls"), "\n"), func(s string) bool {
 			return strings.TrimSpace(s) == ""
 		})
@@ -622,10 +681,23 @@ func (s *Server) recipesAddWebsiteHandler() http.HandlerFunc {
 								return
 							}
 
+							if cookbookID > 0 && len(ids) > 0 {
+								err = s.Repository.AddCookbookRecipe(cookbookID, ids[0], userID)
+								if err != nil {
+									slog.Error("Failed to add imported recipe to cookbook", userIDAttr, "cookbookID", cookbookID, "recipeID", ids[0], "error", err)
+								}
+							}
+
 							report.Logs = append(report.Logs, models.NewReportLog(u, true, err, "/recipes/"+strconv.FormatInt(ids[0], 10)))
 							countSuccess.Add(1)
 						} else {
 							ids = []int64{recipe.ID}
+							if cookbookID > 0 {
+								err = s.Repository.AddCookbookRecipe(cookbookID, recipe.ID, userID)
+								if err != nil {
+									slog.Error("Failed to add existing recipe to cookbook", userIDAttr, "cookbookID", cookbookID, "recipeID", recipe.ID, "error", err)
+								}
+							}
 							report.Logs = append(report.Logs, models.NewReportLog(u, false, nil, "/recipes/"+strconv.FormatInt(recipe.ID, 10)))
 							countWarning.Add(1)
 						}
@@ -1385,6 +1457,45 @@ func (s *Server) recipesViewHandler() http.HandlerFunc {
 		recipe, err := s.Repository.Recipe(id, userID)
 		if err != nil {
 			slog.Error("Failed to fetch recipe", "error", err)
+			notFoundHandler(w, r)
+			return
+		}
+
+		_ = components.ViewRecipe(templates.Data{
+			About:           templates.NewAboutData(),
+			IsAdmin:         userID == 1,
+			IsAuthenticated: true,
+			IsHxRequest:     r.Header.Get("Hx-Request") == "true",
+			View:            templates.NewViewRecipeData(id, recipe, nil, nil, true, false),
+		}).Render(r.Context(), w)
+	}
+}
+
+func (s *Server) recipesRefreshNutritionHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := parsePathPositiveID(r.PathValue("id"))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		userID := getUserID(r)
+		if _, err = s.Repository.Recipe(id, userID); err != nil {
+			slog.Error("Failed to fetch recipe before nutrition refresh", "error", err, "recipeID", id, "userID", userID)
+			notFoundHandler(w, r)
+			return
+		}
+
+		logs := s.Repository.RecalculateNutrition(userID, []int64{id}, nil)
+		if len(logs) > 0 {
+			s.Brokers.SendToast(models.NewWarningToast("Nutrition refresh failed", "The nutrition facts could not be refreshed for this recipe.", ""), userID)
+		} else {
+			s.Brokers.SendToast(models.NewInfoToast("Operation Successful", "Nutrition facts refreshed.", ""), userID)
+		}
+
+		recipe, err := s.Repository.Recipe(id, userID)
+		if err != nil {
+			slog.Error("Failed to fetch recipe after nutrition refresh", "error", err, "recipeID", id, "userID", userID)
 			notFoundHandler(w, r)
 			return
 		}

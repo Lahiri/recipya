@@ -46,6 +46,54 @@ templ cookbookIndex(data templates.Data) {
             loadSortableJS().then(initReorder);
         </script>
 	}
+	if data.CookbookFeature.ShareData.IsFromHost {
+		<div class="flex justify-center p-4">
+			<button class="btn btn-outline btn-sm" onclick="import_recipes_dialog.showModal()">Import</button>
+		</div>
+		<dialog id="import_recipes_dialog" class="modal">
+			<div class="modal-box">
+				<form method="dialog">
+					<button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+				</form>
+				<h3 class="font-bold text-lg">Import Recipes</h3>
+				<div class="grid gap-4 py-4">
+					<form hx-post="/recipes/add/import" enctype="multipart/form-data" hx-indicator="#fullscreen-loader" hx-swap="none">
+						<div class="grid gap-3 mb-4">
+							<div>
+								<label for="import-dialog-file" class="text-sm font-semibold mb-1">Choose files in the .json, .txt, .zip or other application format.</label>
+								<input id="import-dialog-file" type="file" name="files" accept=".cml,.crumb,.json,.mxp,.paprikarecipes,.txt,.zip" multiple class="p-2 border border-gray-300 rounded-lg shadow focus:ring-2 focus:ring-purple-600 dark:bg-gray-900 dark:border-none"/>
+							</div>
+							<div>
+								<label for="import-dialog-keywords" class="text-sm font-semibold mb-1">Default tags</label>
+								<input id="import-dialog-keywords" type="text" name="keywords" placeholder="breakfast, lunch" class="input input-bordered input-sm w-full"/>
+							</div>
+							<input type="hidden" name="cookbookId" value={ fmt.Sprint(data.CookbookFeature.Cookbook.ID) }/>
+						</div>
+						<button type="submit" class="btn btn-block btn-primary btn-sm" onclick="import_recipes_dialog.close()">Submit</button>
+					</form>
+					<form hx-post="/recipes/add/website" hx-swap="none">
+						<div class="grid gap-3 mb-4">
+							<label class="form-control">
+								<div class="label">
+									<span class="label-text">Enter one or more URLs, each on a new line.</span>
+								</div>
+								<textarea
+									class="textarea textarea-bordered whitespace-pre-line"
+									placeholder="URL 1
+URL 2
+URL 3"
+									name="urls"
+									rows="5"
+								></textarea>
+							</label>
+							<input type="hidden" name="cookbookId" value={ fmt.Sprint(data.CookbookFeature.Cookbook.ID) }/>
+						</div>
+						<button type="submit" class="btn btn-block btn-primary btn-sm" onclick="import_recipes_dialog.close()">Fetch</button>
+					</form>
+				</div>
+			</div>
+		</dialog>
+	}
 	if len(data.CookbookFeature.Cookbook.Recipes) > 0 {
 		<section class="grid gap-4 text-sm justify-center md:p-4 md:text-base">
 			<div class="flex flex-col h-full">
@@ -78,9 +126,7 @@ templ cookbookIndex(data templates.Data) {
 					{ data.CookbookFeature.Cookbook.Title }
 				</p>
 			</section>
-			<section id="search-results" class="justify-center grid">
-				@CookbookIndexNoRecipes(data.CookbookFeature.ShareData.IsFromHost)
-			</section>
+			@CookbookIndexNoRecipes(data.CookbookFeature.ShareData.IsFromHost)
 		</div>
 	}
 }

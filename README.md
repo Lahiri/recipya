@@ -24,8 +24,10 @@ Compared to the original repository, this fork currently includes:
 - Recipe PDF exports with the recipe image included when available.
 - Improved browser print output with a cookbook-style layout, recipe image, compact metadata, nutrition summary, and source footnote.
 - Print layout refinements for spacing, rounded sections, background colors, ingredient/instruction columns, and better page fit.
-- Servings scaling improvements, including support for more ingredient quantity formats and print output that reflects the currently selected serving count.
+- Servings scaling improvements, including support for more ingredient quantity formats, print output that reflects the currently selected serving count, and nutrition facts calculated per serving.
 - Language-aware ingredient normalization for nutrition facts, using local dictionaries and configurable translation fallback providers such as DeepL, Google Translate, and Azure AI Translator.
+- Recipe-page nutrition refresh from the nutrition facts box, so nutrition can be recalculated without changing recipe language settings.
+- Cookbook-scoped imports, including direct website URL import into a selected cookbook and optional default tags for imported recipes.
 
 ## :warning: Important Note
 
@@ -42,7 +44,7 @@ The user interface should look better than the original.
 - Organize your recipes into cookbooks
 - Easily migrate your recipes from [Mealie](https://mealie.io), [Tandoor](https://tandoor.dev) and [Nextcloud Cookbook](https://apps.nextcloud.com/apps/cookbook)
 - Automatic conversion to your preferred measurement system (imperial/metric)
-- Calculate nutritional information automatically, including language-aware ingredient normalization for nutrition lookups
+- Calculate nutritional information automatically per serving, including language-aware ingredient normalization for nutrition lookups
 - Print any recipe in your collection
 - Prevent your device from going to sleep while viewing a recipe
 - Follows your system's theme (light/dark) or choose among 32 themes

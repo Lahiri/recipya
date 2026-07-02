@@ -733,6 +733,32 @@ func TestNutrientsFDC_CalculateNutrition(t *testing.T) {
 	}
 }
 
+func TestNutrientsFDC_NutritionTotalIncreasesWithIngredientQuantity(t *testing.T) {
+	base := models.NutrientsFDC{
+		{Name: "Energy", Amount: 400, UnitName: "KCAL", Reference: units.Measurement{Quantity: 100, Unit: units.Gram}},
+	}
+	withMoreIngredients := models.NutrientsFDC{
+		{Name: "Energy", Amount: 400, UnitName: "KCAL", Reference: units.Measurement{Quantity: 100, Unit: units.Gram}},
+		{Name: "Energy", Amount: 40, UnitName: "KCAL", Reference: units.Measurement{Quantity: 100, Unit: units.Gram}},
+	}
+
+	baseTotal := base.NutritionTotal()
+	if baseTotal.Calories != "400 kcal" {
+		t.Fatalf("base NutritionTotal().Calories = %q, want %q", baseTotal.Calories, "400 kcal")
+	}
+
+	got := withMoreIngredients.NutritionTotal()
+	want := models.Nutrition{Calories: "440 kcal"}
+	if got.Calories != want.Calories {
+		t.Fatalf("NutritionTotal().Calories = %q, want %q", got.Calories, want.Calories)
+	}
+
+	per100g := withMoreIngredients.NutritionFact(200)
+	if per100g.Calories != "220 kcal" {
+		t.Fatalf("NutritionFact(200).Calories = %q, want %q", per100g.Calories, "220 kcal")
+	}
+}
+
 func TestNutrition_Format(t *testing.T) {
 	testcases := []struct {
 		name string

@@ -293,18 +293,31 @@ etc..."
 					hx-indicator="#fullscreen-loader"
 					hx-swap="none"
 				>
-					<div class="grid mb-4">
-						<label for="import-dialog-file" class="text-sm font-semibold mb-1">
-							Choose files in the .json, .txt, .zip or other application format.
-						</label>
-						<input
-							id="import-dialog-file"
-							type="file"
-							name="files"
-							accept=".cml,.crumb,.json,.mxp,.paprikarecipes,.txt,.zip"
-							multiple
-							class="p-2 border border-gray-300 rounded-lg shadow focus:ring-2 focus:ring-purple-600 dark:bg-gray-900 dark:border-none"
-						/>
+					<div class="grid gap-3 mb-4">
+						<div>
+							<label for="import-dialog-file" class="text-sm font-semibold mb-1">
+								Choose files in the .json, .txt, .zip or other application format.
+							</label>
+							<input
+								id="import-dialog-file"
+								type="file"
+								name="files"
+								accept=".cml,.crumb,.json,.mxp,.paprikarecipes,.txt,.zip"
+								multiple
+								class="p-2 border border-gray-300 rounded-lg shadow focus:ring-2 focus:ring-purple-600 dark:bg-gray-900 dark:border-none"
+							/>
+						</div>
+						<div>
+							<label for="import-dialog-keywords" class="text-sm font-semibold mb-1">Default tags</label>
+							<input
+								id="import-dialog-keywords"
+								type="text"
+								name="keywords"
+								placeholder="breakfast, lunch"
+								class="input input-bordered input-sm w-full"
+							/>
+						</div>
+						<input type="hidden" name="cookbookId" value=""/>
 					</div>
 					<button type="submit" class="btn btn-block btn-primary btn-sm" onclick="import_recipes_dialog.close()">
 						Submit
@@ -2410,17 +2423,31 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 									<time datetime={ data.FormattedTimes.TotalDateTime }>{ data.FormattedTimes.Total }</time>
 								</div>
 							</div>
-							<div class={ "grid grid-flow-col border-gray-700 border-y col-span-6 md:border-t-0 md:row-span-2 print:border-none", templ.KV("print:hidden", data.Recipe.Nutrition.Equal(models.Nutrition{})) }>
+							<div class={ "border-gray-700 border-y col-span-6 md:border-t-0 md:row-span-2 print:border-none", templ.KV("print:hidden", data.Recipe.Nutrition.Equal(models.Nutrition{})) }>
 								<table class="table table-zebra table-xs print:hidden">
 									<thead>
 										<tr>
 											<th>
-												Nutrition (per
-												if data.Recipe.Nutrition.IsPerServing {
-													serving)
-												} else {
-													100g)
-												}
+												<div class="flex items-center gap-2">
+													<button
+														type="button"
+														class="btn btn-ghost btn-xs p-1"
+														title="Refresh nutrition facts"
+														hx-post={ fmt.Sprintf("/recipes/%d/nutrition/refresh", data.ID) }
+														hx-target="#content"
+														hx-swap="innerHTML transition:true"
+													>
+														<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+															<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.2M20 20v-5h-.2M5.3 9a7 7 0 0 1 11.4-2.6L20 8m0 8a7 7 0 0 1-11.4 2.6L4 16"></path>
+														</svg>
+													</button>
+													<span>Nutrition (per</span>
+													if data.Recipe.Nutrition.IsPerServing {
+														<span>serving)</span>
+													} else {
+														<span>100g)</span>
+													}
+												</div>
 											</th>
 											<th>Amount</th>
 										</tr>

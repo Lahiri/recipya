@@ -661,69 +661,103 @@ func (n *Nutrition) Schema(servings string) *NutritionSchema {
 // NutrientsFDC is a type alias for a slice of NutrientFDC.
 type NutrientsFDC []NutrientFDC
 
+type nutrientTotals struct {
+	calories       float64
+	carbs          float64
+	cholesterol    float64
+	fiber          float64
+	protein        float64
+	totalFat       float64
+	saturatedFat   float64
+	unsaturatedFat float64
+	transFat       float64
+	sodium         float64
+	sugars         float64
+}
+
 // NutritionFact calculates the nutrition facts from the nutrients.
 // The values in the nutrition table are per 100 grams. The weight is
 // the sum of all ingredient quantities in grams.
 func (n NutrientsFDC) NutritionFact(weight float64) Nutrition {
-	var (
-		calories       float64
-		carbs          float64
-		cholesterol    float64
-		fiber          float64
-		protein        float64
-		totalFat       float64
-		saturatedFat   float64
-		unsaturatedFat float64
-		transFat       float64
-		sodium         float64
-		sugars         float64
-	)
+	if weight == 0 {
+		return Nutrition{}
+	}
+
+	totals := n.totals()
+	totals.scale(1 / (weight * 1e-2))
+	return totals.nutrition()
+}
+
+// NutritionTotal calculates the nutrition facts for the full recipe quantity.
+func (n NutrientsFDC) NutritionTotal() Nutrition {
+	return n.totals().nutrition()
+}
+
+func (n NutrientsFDC) totals() nutrientTotals {
+	var totals nutrientTotals
 
 	for _, nutrient := range n {
 		v := nutrient.Value()
 
 		switch nutrient.Name {
 		case "Carbohydrates":
-			carbs += v
+			totals.carbs += v
 		case "Cholesterol":
-			cholesterol += v
+			totals.cholesterol += v
 		case "Energy":
 			if nutrient.UnitName == "KCAL" {
-				calories += v
+				totals.calories += v
 			}
 		case "Fatty acids, total monounsaturated", "Fatty acids, total polyunsaturated":
-			unsaturatedFat += v
-			totalFat += v
+			totals.unsaturatedFat += v
+			totals.totalFat += v
 		case "Fatty acids, total trans":
-			transFat += v
-			totalFat += v
+			totals.transFat += v
+			totals.totalFat += v
 		case "Fatty acids, total saturated":
-			saturatedFat += v
-			totalFat += v
+			totals.saturatedFat += v
+			totals.totalFat += v
 		case "Fiber, total dietary":
-			fiber += v
+			totals.fiber += v
 		case "Protein":
-			protein += v
+			totals.protein += v
 		case "Sodium, Na":
-			sodium += v
+			totals.sodium += v
 		case "Sugars, total including NLEA":
-			sugars += v
+			totals.sugars += v
 		}
 	}
 
-	weight *= 1e-2
+	return totals
+}
+
+func (n *nutrientTotals) scale(multiplier float64) {
+	n.calories *= multiplier
+	n.carbs *= multiplier
+	n.cholesterol *= multiplier
+	n.fiber *= multiplier
+	n.protein *= multiplier
+	n.totalFat *= multiplier
+	n.saturatedFat *= multiplier
+	n.unsaturatedFat *= multiplier
+	n.transFat *= multiplier
+	n.sodium *= multiplier
+	n.sugars *= multiplier
+}
+
+func (n nutrientTotals) nutrition() Nutrition {
 	return Nutrition{
-		Calories:           strconv.FormatFloat(calories/weight, 'f', 0, 64) + " kcal",
-		Cholesterol:        formatNutrient(cholesterol / weight),
-		Fiber:              formatNutrient(fiber / weight),
-		Protein:            formatNutrient(protein / weight),
-		TotalFat:           formatNutrient(totalFat / weight),
-		SaturatedFat:       formatNutrient(saturatedFat / weight),
-		UnsaturatedFat:     formatNutrient(unsaturatedFat / weight),
-		TransFat:           formatNutrient(transFat / weight),
-		Sodium:             formatNutrient(sodium / weight),
-		Sugars:             formatNutrient(sugars / weight),
-		TotalCarbohydrates: formatNutrient(carbs / weight),
+		Calories:           strconv.FormatFloat(n.calories, 'f', 0, 64) + " kcal",
+		Cholesterol:        formatNutrient(n.cholesterol),
+		Fiber:              formatNutrient(n.fiber),
+		Protein:            formatNutrient(n.protein),
+		TotalFat:           formatNutrient(n.totalFat),
+		SaturatedFat:       formatNutrient(n.saturatedFat),
+		UnsaturatedFat:     formatNutrient(n.unsaturatedFat),
+		TransFat:           formatNutrient(n.transFat),
+		Sodium:             formatNutrient(n.sodium),
+		Sugars:             formatNutrient(n.sugars),
+		TotalCarbohydrates: formatNutrient(n.carbs),
 	}
 }
 
