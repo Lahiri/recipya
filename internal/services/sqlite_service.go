@@ -1797,17 +1797,16 @@ func (s *SQLiteService) SearchRecipes(opts models.SearchOptionsRecipes, userID i
 
 	args := []any{userID}
 
-	arg := opts.Arg()
-	if arg != "" {
-		var fts string
-		if opts.Query != "" {
-			fts += opts.Query + "* AND "
+	fts := opts.MatchArg()
+	if arg := opts.Arg(); arg != "" {
+		if fts != "" {
+			fts += " AND " + arg
+		} else {
+			fts = arg
 		}
-		args = append(args, fts+arg)
-	} else {
-		if opts.Query != "" {
-			args = append(args, strings.Join(strings.Fields(opts.Query), " *")+"*")
-		}
+	}
+	if fts != "" {
+		args = append(args, fts)
 	}
 
 	if opts.CookbookID > 0 {

@@ -2,23 +2,24 @@ package components
 
 import (
 	"fmt"
+
 	"github.com/reaper47/recipya/internal/templates"
 )
 
 templ searchbar(data templates.SearchbarData) {
-	<div class="w-full">
-		<label class="input input-bordered input-sm flex justify-between px-0 gap-2 z-20">
+	<div class="w-full" data-searchbar-root="true">
+		<div class="flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-2 py-2 shadow-sm">
 			<button type="button" id="search_shortcut" class="pl-2" popovertarget="search_help" _="on click toggle .hidden on #search_help">
 				@iconHelp()
 			</button>
 			<input
 				id="search_recipes"
-				class="w-full"
+				class="w-full bg-transparent outline-none"
 				type="search"
-				name="q"
-				placeholder="Search for recipes..."
+				placeholder="Search recipes, ingredients, and tags..."
 				value={ data.Term }
-				_="on keyup
+				_="on focus remove .hidden from #search_advanced_panel
+                     on keyup
                      if event.target.value !== '' then
                          remove .md:block from #search_shortcut
                      else
@@ -32,8 +33,102 @@ templ searchbar(data templates.SearchbarData) {
 				@iconMagnifyingGlass()
 				<span class="sr-only">Search</span>
 			</button>
-		</label>
+			<input id="search_query" type="hidden" name="q" value={ data.Term }/>
+		</div>
+		<div class="mt-2 rounded-xl border border-base-300 bg-base-100/95 p-3 shadow-sm">
+			<div class="flex items-center justify-between gap-2">
+				<p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-base-content/70">Filters</p>
+				<button type="button" class="btn btn-ghost btn-xs" id="search_panel_toggle" _="on click toggle .hidden on #search_advanced_panel then if #search_advanced_panel.matches('.hidden') then put 'Show filters' into me.innerHTML else put 'Hide filters' into me.innerHTML end">
+					Hide filters
+				</button>
+			</div>
+			<div id="search_advanced_panel" class="mt-3 grid gap-3 md:grid-cols-3">
+				<label class="form-control">
+					<span class="label pb-1 pt-0">
+						<span class="label-text text-xs font-semibold uppercase tracking-wide">Category</span>
+					</span>
+					<input type="text" class="input input-bordered input-sm w-full" placeholder="Breakfast" data-filter="category" value={ data.Category }/>
+				</label>
+				<label class="form-control">
+					<span class="label pb-1 pt-0">
+						<span class="label-text text-xs font-semibold uppercase tracking-wide">Ingredients</span>
+					</span>
+					<input type="text" class="input input-bordered input-sm w-full" placeholder="Butter, garlic" data-filter="ingredients" value={ data.Ingredients }/>
+				</label>
+				<div class="form-control">
+					<span class="label pb-1 pt-0">
+						<span class="label-text text-xs font-semibold uppercase tracking-wide">Tags</span>
+					</span>
+					<input id="search_tag_input" type="text" class="input input-bordered input-sm w-full" placeholder="Add tag and press Enter" autocomplete="off"/>
+					<div id="search_tags" class="mt-2 flex min-h-10 flex-wrap gap-2 rounded-lg border border-base-300 bg-base-200/60 p-2"></div>
+					<input id="search_tag_values" type="hidden" value={ data.Tags }/>
+				</div>
+			</div>
+		</div>
 	</div>
+	<script>
+	(function () {
+		const root = document.currentScript.previousElementSibling;
+		const form = root.closest('form');
+		const input = root.querySelector('#search_recipes');
+		const queryInput = root.querySelector('#search_query');
+		const categoryInput = root.querySelector('[data-filter="category"]');
+		const ingredientInput = root.querySelector('[data-filter="ingredients"]');
+		const tagValuesInput = root.querySelector('#search_tag_values');
+		const tagChips = root.querySelector('#search_tags');
+		const tagInput = root.querySelector('#search_tag_input');
+
+		function tags() {
+			return tagValuesInput.value.split(',').map((value) => value.trim()).filter(Boolean);
+		}
+
+		function renderTagChips() {
+			tagChips.replaceChildren(...tags().map((value) => {
+				const chip = document.createElement('button');
+				chip.type = 'button';
+				chip.className = 'badge badge-outline badge-sm';
+				chip.textContent = value;
+				chip.addEventListener('click', () => updateTags(tags().filter((tag) => tag !== value)));
+				return chip;
+			}));
+		}
+
+		function updateTags(values) {
+			tagValuesInput.value = values.join(',');
+			renderTagChips();
+			form.requestSubmit();
+		}
+
+		function composeQuery() {
+			const terms = [input.value.trim()];
+			if (categoryInput.value.trim()) {
+				terms.push('cat:' + categoryInput.value.trim());
+			}
+			if (ingredientInput.value.trim()) {
+				terms.push('ing:' + ingredientInput.value.trim());
+			}
+			if (tagValuesInput.value.trim()) {
+				terms.push('tag:' + tagValuesInput.value.trim());
+			}
+			queryInput.value = terms.filter(Boolean).join(' ');
+		}
+
+		form.addEventListener('submit', composeQuery);
+		tagInput.addEventListener('keydown', (event) => {
+			if (event.key !== 'Enter' && event.key !== ',') {
+				return;
+			}
+
+			event.preventDefault();
+			const value = tagInput.value.trim();
+			if (value && !tags().includes(value)) {
+				updateTags([...tags(), value]);
+			}
+			tagInput.value = '';
+		});
+		renderTagChips();
+	})();
+	</script>
 	<div class="dropdown dropdown-left ml-1">
 		<div tabindex="0" role="button" class="btn btn-sm p-1">
 			@iconSort()
@@ -91,7 +186,10 @@ templ searchHelp() {
 			</div>
 			<div>
 				<p class="text-xs mb-2">
-					The following table provide examples of how to perform various searches. You may combine any of these in any order.
+					Plain-text searches now also match ingredients and tags. Use the filters panel to target category, ingredient, and tag shortcuts, or keep using the existing prefixes such as <em>cat:</em>, <em>ing:</em>, and <em>tag:</em> when you want advanced searches.
+				</p>
+				<p class="text-xs mb-2">
+					The following table shows examples of how to perform various searches. You can combine any of these in any order.
 				</p>
 				<div class="overflow-x-auto max-h-64">
 					<table class="table table-xs table-pin-rows">

@@ -386,6 +386,13 @@ func TestNewAdvancedSearch(t *testing.T) {
 			},
 		},
 		{
+			name:  "with multi-word source",
+			query: "q=src:family recipe",
+			want: models.AdvancedSearch{
+				Source: "family recipe",
+			},
+		},
+		{
 			name:  "with sources",
 			query: "q=src:allrecipes.com,betterhelp.com",
 			want: models.AdvancedSearch{
@@ -462,6 +469,11 @@ func TestSearchOptionsRecipes_Args(t *testing.T) {
 			want: `(category:"dinner*")`,
 		},
 		{
+			name: "category with double quote",
+			in:   models.SearchOptionsRecipes{Advanced: models.AdvancedSearch{Category: `foo"`}},
+			want: `(category:"foo""*")`,
+		},
+		{
 			name: "multiple categories",
 			in:   models.SearchOptionsRecipes{Advanced: models.AdvancedSearch{Category: "breakfast, dinner"}},
 			want: `(category:"breakfast*" OR category:"dinner*")`,
@@ -533,6 +545,11 @@ func TestSearchOptionsRecipes_Args(t *testing.T) {
 			want: `(keywords:"biscuits*")`,
 		},
 		{
+			name: "keyword with double quote",
+			in:   models.SearchOptionsRecipes{Advanced: models.AdvancedSearch{Keywords: `aglio"`}},
+			want: `(keywords:"aglio""*")`,
+		},
+		{
 			name: "multiple keywords",
 			in:   models.SearchOptionsRecipes{Advanced: models.AdvancedSearch{Keywords: "biscuits,mardi gras"}},
 			want: `(keywords:"biscuits*" AND keywords:"mardi gras*")`,
@@ -564,6 +581,35 @@ func TestSearchOptionsRecipes_Args(t *testing.T) {
 
 			if got != tc.want {
 				t.Fatalf("got %v; want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSearchOptionsRecipes_MatchArg(t *testing.T) {
+	testcases := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{name: "empty", want: ""},
+		{
+			name:  "one term matches the default fields",
+			query: `"butter"`,
+			want:  `(name:"butter*" OR ingredients:"butter*" OR keywords:"butter*")`,
+		},
+		{
+			name:  "all terms must match",
+			query: `"chicken soup"`,
+			want:  `(name:"chicken*" OR ingredients:"chicken*" OR keywords:"chicken*") AND (name:"soup*" OR ingredients:"soup*" OR keywords:"soup*")`,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := (&models.SearchOptionsRecipes{Query: tc.query}).MatchArg()
+			if got != tc.want {
+				t.Fatalf("MatchArg() = %q, want %q", got, tc.want)
 			}
 		})
 	}

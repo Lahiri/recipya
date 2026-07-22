@@ -855,9 +855,23 @@ func (s *SearchOptionsRecipes) Arg() string {
 	}), " AND ")
 }
 
+// MatchArg returns a fallback FTS expression for plain-text search terms.
+func (s *SearchOptionsRecipes) MatchArg() string {
+	terms := strings.Fields(strings.ReplaceAll(strings.TrimSpace(s.Query), `"`, ""))
+	expressions := make([]string, 0, len(terms))
+	for _, term := range terms {
+		expressions = append(expressions, `(name:"`+term+`*" OR ingredients:"`+term+`*" OR keywords:"`+term+`*")`)
+	}
+
+	return strings.Join(expressions, " AND ")
+}
+
 func toArg(s, col string) string {
 	parts := strings.Split(s, ",")
-	if len(parts) == 0 || (len(parts) == 1 && parts[0] == "") {
+	parts = slices.DeleteFunc(parts, func(part string) bool {
+		return strings.TrimSpace(part) == ""
+	})
+	if len(parts) == 0 {
 		return ""
 	}
 
@@ -875,12 +889,12 @@ func toArg(s, col string) string {
 			}
 
 			cat.WriteString(col + ":NEAR(")
-			subParts := strings.Split(part, " ")
+			subParts := strings.Fields(part)
 			for i, subPart := range subParts {
 				if i > 0 {
 					cat.WriteString(" ")
 				}
-				cat.WriteString(`"` + subPart + `"`)
+				cat.WriteString(quoteFTS(subPart))
 			}
 			cat.WriteString(")")
 		}
@@ -891,18 +905,17 @@ func toArg(s, col string) string {
 			}
 
 			subcats := strings.Split(strings.TrimSpace(part), ":")
-			if len(subcats) > 0 {
-				cat.WriteString(col + `:"`)
-				cat.WriteString(strings.Join(subcats, "*+"))
-				cat.WriteString(`*"`)
-			} else {
-				cat.WriteString(col + `:"` + strings.TrimSpace(part) + `*"`)
-			}
+			cat.WriteString(col + ":")
+			cat.WriteString(quoteFTS(strings.Join(subcats, "*+") + "*"))
 		}
 	}
 
 	cat.WriteString(")")
 	return cat.String()
+}
+
+func quoteFTS(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
 // IsBasic verifies whether the search is basic.
@@ -1016,6 +1029,7 @@ func NewAdvancedSearch(query string) AdvancedSearch {
 			a.Name = strings.TrimPrefix(s, "name:")
 		} else if strings.HasPrefix(s, "src:") {
 			reset()
+			isSource = true
 			a.Source = strings.TrimPrefix(s, "src:")
 		} else if strings.HasPrefix(s, "tag:") {
 			reset()

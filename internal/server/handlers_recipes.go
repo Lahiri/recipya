@@ -50,8 +50,35 @@ func (s *Server) recipesHandler() http.HandlerFunc {
 			IsHxRequest:     r.Header.Get("HX-Request") == "true",
 			Pagination:      p,
 			Recipes:         s.Repository.Recipes(userID, opts),
-			Searchbar:       templates.SearchbarData{Sort: opts.Sort.String(), Term: opts.Query},
+			Searchbar:       newSearchbarData(opts),
 		}).Render(r.Context(), w)
+	}
+}
+
+func newSearchbarData(opts models.SearchOptionsRecipes) templates.SearchbarData {
+	terms := []string{strings.ReplaceAll(strings.Trim(opts.Query, `"`), "''", "'")}
+	for _, field := range []struct {
+		prefix string
+		value  string
+	}{
+		{prefix: "cuisine:", value: opts.Advanced.Cuisine},
+		{prefix: "desc:", value: opts.Advanced.Description},
+		{prefix: "ins:", value: opts.Advanced.Instructions},
+		{prefix: "name:", value: opts.Advanced.Name},
+		{prefix: "src:", value: opts.Advanced.Source},
+		{prefix: "tool:", value: opts.Advanced.Tools},
+	} {
+		if field.value != "" {
+			terms = append(terms, field.prefix+field.value)
+		}
+	}
+
+	return templates.SearchbarData{
+		Category:    opts.Advanced.Category,
+		Ingredients: opts.Advanced.Ingredients,
+		Sort:        opts.Sort.String(),
+		Tags:        opts.Advanced.Keywords,
+		Term:        strings.TrimSpace(strings.Join(terms, " ")),
 	}
 }
 
@@ -1396,7 +1423,7 @@ func (s *Server) recipesSearchHandler() http.HandlerFunc {
 			Functions:       templates.NewFunctionsData[int64](),
 			Pagination:      p,
 			Recipes:         recipes,
-			Searchbar:       templates.SearchbarData{Sort: opts.Sort.String(), Term: r.URL.Query().Get("q")},
+			Searchbar:       newSearchbarData(opts),
 		}).Render(r.Context(), w)
 	}
 }

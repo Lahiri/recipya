@@ -3,12 +3,22 @@
 		"from": "my@email.com",
 		"host": "smtp.gmail.com",
 		"username": "my@email.com",
-		"password": "app password",
+		"password": "app password"
 	},
 	"integrations": {
 		"azureDocumentIntelligence": {
 			"endpoint": "https://{resource_name}.cognitiveservices.azure.com/",
 			"key": "KEY_1"
+		},
+		"translation": {
+			"enabled": false,
+			"provider": "deepl",
+			"apiUrl": "https://api-free.deepl.com/v2/translate",
+			"apiKey": "",
+			"apiKeyEnv": "RECIPYA_DEEPL_API_KEY",
+			"region": "westeurope",
+			"timeoutSeconds": 5,
+			"sourceLanguages": ["it"]
 		}
 	},
 	"server": {

@@ -540,7 +540,7 @@ func (s *Server) cookbooksRecipesSearchHandler() http.HandlerFunc {
 			IsHxRequest:     isHxReq,
 			Functions:       templates.NewFunctionsData[int64](),
 			Pagination:      p,
-			Searchbar:       templates.SearchbarData{Sort: opts.Sort.String(), Term: r.URL.Query().Get("q")},
+			Searchbar:       newSearchbarData(opts),
 		}).Render(r.Context(), w)
 	}
 }

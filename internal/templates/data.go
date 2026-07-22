@@ -277,8 +277,11 @@ type ReportsData struct {
 
 // SearchbarData holds data related to the searchbar.
 type SearchbarData struct {
-	Sort string
-	Term string
+	Category    string
+	Ingredients string
+	Sort        string
+	Tags        string
+	Term        string
 }
 
 // ShareData holds information on the entity being shared.

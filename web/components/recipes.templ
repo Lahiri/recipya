@@ -1903,26 +1903,6 @@ templ recipesIndex(data templates.Data) {
 }
 
 templ ListRecipes(data templates.Data) {
-	if data.IsHxRequest {
-		<input
-			hx-swap-oob="true"
-			type="search"
-			id="search_recipes"
-			name="q"
-			class="w-full"
-			placeholder="Search for recipes..."
-			value={ data.Searchbar.Term }
-			_="on keyup
-               if event.target.value !== '' then
-                   remove .md:block from #search_shortcut
-               else
-                   add .md:block to #search_shortcut then
-                   if (event.key is not 'Delete' and not event.key.startsWith('Arrow')) then
-                       send submit to closest <form/> then
-                   end
-               end"
-		/>
-	}
 	<article class="grid gap-4 p-4 text-sm place-items-center grid-cols-1 sm:grid-cols-2 md:m-auto md:max-w-7xl md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 md:text-base">
 		for _, r := range data.Recipes {
 			<section class="card-side sm:card card-compact card-bordered bg-base-100 shadow-lg indicator w-full">
