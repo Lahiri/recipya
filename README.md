@@ -29,6 +29,7 @@ Compared to the original repository, this fork currently includes:
 - Recipe-page nutrition refresh from the nutrition facts box, so nutrition can be recalculated without changing recipe language settings.
 - Cookbook-scoped imports, including direct website URL import into a selected cookbook and optional default tags for imported recipes.
 - A shared search experience for recipes and cookbooks, with plain-text ingredient and tag matching plus advanced filters for category, ingredient, and tag shortcuts.
+- Pinned recipes on the home and recipe views, with theme-aware controls and pinned-first ordering across search and sort modes.
 
 ## :warning: Important Note
 
@@ -43,6 +44,7 @@ The user interface should look better than the original.
 - Import recipes from around the web
 - Digitize paper recipes
 - Organize your recipes into cookbooks
+- Pin recipes to keep them at the top of the home page
 - Search recipes and cookbooks with shared filters, ingredient matching, and tag-aware results
 - Easily migrate your recipes from [Mealie](https://mealie.io), [Tandoor](https://tandoor.dev) and [Nextcloud Cookbook](https://apps.nextcloud.com/apps/cookbook)
 - Automatic conversion to your preferred measurement system (imperial/metric)
