@@ -514,7 +514,7 @@ func (s *Server) cookbooksRecipesSearchHandler() http.HandlerFunc {
 
 		isHxReq := r.Header.Get("HX-Request") == "true"
 
-		params := "q=" + r.URL.Query().Get("q") + "&sort=" + opts.Sort.String()
+		params := searchPaginationParams(r.URL.Query(), opts.Sort)
 		htmx := templates.PaginationHtmx{IsSwap: isHxReq, Target: "#search-results"}
 		p := templates.NewPagination(opts.Page, numPages, totalCount, templates.ResultsPerPage, "/cookbooks/"+idStr+"/recipes/search", params, htmx)
 		p.Search.CurrentPage = opts.Page

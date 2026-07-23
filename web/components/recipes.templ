@@ -1911,7 +1911,7 @@ templ ListRecipes(data templates.Data) {
 				</span>
 				<figure class="relative cursor-pointer" hx-get={ fmt.Sprintf("/recipes/%d", r.ID) } hx-target="#content" hx-push-url="true" hx-trigger="mousedown" hx-swap="innerHTML show:window:top transition:true">
 					<img
-						class="h-28 w-24 object-cover rounded-t-lg sm:h-40 sm:min-w-full sm:w-full"
+						class="h-full min-h-28 w-24 object-cover rounded-t-lg sm:h-40 sm:min-h-0 sm:min-w-full sm:w-full"
 						if len(r.Images) > 0 && data.Functions.IsUUIDValid(r.Images[0]) && data.Functions.IsImageExists(r.Images[0]) {
 							src={ "/data/images/thumbnails/" + r.Images[0].String() + app.ImageExt }
 						} else {
@@ -1923,7 +1923,7 @@ templ ListRecipes(data templates.Data) {
 						<p class="p-2 text-sm">{ data.Functions.CutString(r.Description, 127) }</p>
 					</div>
 				</figure>
-				<div class="card-body justify-between">
+				<div class="card-body justify-between px-4 !py-0 sm:!p-4">
 					<h2 class={ "sm:font-semibold sm:w-[25ch] sm:break-words sm:min-h-14", templ.KV("sm:min-h-28", len(r.Keywords) == 0) }>
 						{ r.Name }
 					</h2>
@@ -1947,15 +1947,61 @@ templ ListRecipes(data templates.Data) {
 							}
 						</div>
 					</div>
-					<div class="card-actions flex-col-reverse h-fit">
-						<button class="btn btn-block btn-xs btn-outline sm:btn-sm" hx-get={ fmt.Sprintf("/recipes/%d", r.ID) } hx-target="#content" hx-trigger="mousedown" hx-push-url="true" hx-swap="innerHTML show:window:top transition:true">
+					<div class="card-actions flex-row h-fit gap-2">
+						<button class="btn btn-primary hover:btn-accent flex-1 btn-xs rounded-md sm:btn-sm" hx-get={ fmt.Sprintf("/recipes/%d", r.ID) } hx-target="#content" hx-trigger="mousedown" hx-push-url="true" hx-swap="innerHTML show:window:top transition:true">
 							View
 						</button>
+						@RecipeHighlightButton(r.ID, r.Highlighted, true)
 					</div>
 				</div>
 			</section>
 		}
 	</article>
+}
+
+templ RecipeHighlightButton(recipeID int64, highlighted bool, compact bool) {
+	<button
+		type="button"
+		class={ "btn rounded-md", templ.KV("shrink-0 p-0 btn-xs size-6 sm:btn-sm sm:size-8", compact), templ.KV("btn-sm", !compact), templ.KV("btn-outline", !highlighted), templ.KV("btn-primary", highlighted) }
+		hx-post={ fmt.Sprintf("/recipes/%d/highlight?compact=%t", recipeID, compact) }
+		hx-target="this"
+		hx-swap="outerHTML"
+		title={ fmt.Sprintf("%s recipe", func() string {
+	if highlighted {
+		return "Unpin"
+	}
+	return "Pin"
+}()) }
+		aria-label={ fmt.Sprintf("%s recipe", func() string {
+	if highlighted {
+		return "Unpin"
+	}
+	return "Pin"
+}()) }
+	>
+		if compact {
+			if highlighted {
+				<span aria-hidden="true">★</span>
+			} else {
+				<span aria-hidden="true">☆</span>
+			}
+		} else {
+			<span class="flex items-center gap-1">
+				if highlighted {
+					<span aria-hidden="true">★</span>
+				} else {
+					<span aria-hidden="true">☆</span>
+				}
+				<span>
+					if highlighted {
+						Pinned
+					} else {
+						Pin
+					}
+				</span>
+			</span>
+		}
+	</button>
 }
 
 templ categoryBadge(category string, isInCard bool) {
@@ -2038,6 +2084,9 @@ templ viewRecipe(data *templates.ViewRecipeData, isAuthenticated bool) {
 								@iconBulbOn()
 							</button>
 							if isAuthenticated && data.Share.IsFromHost {
+								<div class="ml-2 hidden sm:block">
+									@RecipeHighlightButton(data.Recipe.ID, data.Recipe.Highlighted, false)
+								</div>
 								<button
 									class="ml-2 hidden sm:block"
 									title="Edit recipe"

@@ -144,6 +144,7 @@ func (s *Server) mountHandlers() {
 	mux.Handle("GET /recipes/{id}", s.mustBeLoggedInMiddleware(s.recipesViewHandler()))
 	mux.Handle("DELETE /recipes/{id}", withLog(s.recipeDeleteHandler()))
 	mux.Handle("GET /recipes/{id}/scale", s.mustBeLoggedInMiddleware(s.recipeScaleHandler()))
+	mux.Handle("POST /recipes/{id}/highlight", s.mustBeLoggedInMiddleware(s.recipeHighlightHandler()))
 	mux.Handle("POST /recipes/{id}/nutrition/refresh", s.mustBeLoggedInMiddleware(s.recipesRefreshNutritionHandler()))
 	mux.Handle("POST /recipes/{id}/share", withLog(s.recipeSharePostHandler()))
 	mux.Handle("GET /recipes/{id}/share/add", withLog(s.recipeShareAddHandler()))

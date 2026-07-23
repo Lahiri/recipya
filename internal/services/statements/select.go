@@ -39,7 +39,7 @@ func buildSelectPaginatedResultsQuery(options models.SearchOptionsRecipes) strin
 func buildSearchRecipeQuery(opts models.SearchOptionsRecipes) string {
 	var sb strings.Builder
 
-	sb.WriteString("SELECT recipe_id, name, description, image, created_at, category, keywords, row_num FROM (" + BuildBaseSelectRecipe(opts.Sort))
+	sb.WriteString("SELECT recipe_id, name, description, image, created_at, category, keywords, highlighted, row_num FROM (" + BuildBaseSelectRecipe(opts.Sort))
 	sb.WriteString(" WHERE recipes.id IN (SELECT id FROM recipes_fts WHERE user_id = ?")
 
 	if opts.Query != "" || !opts.IsBasic() {
@@ -280,10 +280,10 @@ func BuildBaseSelectRecipe(sorts models.Sort) string {
 		return baseSelectSearchRecipe
 	}
 
-	before, after, _ := strings.Cut(baseSelectSearchRecipe, "ROW_NUMBER() OVER (ORDER BY recipes.id) AS row_num")
+	before, after, _ := strings.Cut(baseSelectSearchRecipe, "ROW_NUMBER() OVER (ORDER BY CASE WHEN recipes.highlighted = 1 THEN 0 ELSE 1 END, recipes.id) AS row_num")
 	var sb strings.Builder
 	sb.WriteString(before)
-	sb.WriteString(" ROW_NUMBER() OVER (ORDER BY " + s + ") AS row_num")
+	sb.WriteString(" ROW_NUMBER() OVER (ORDER BY CASE WHEN recipes.highlighted = 1 THEN 0 ELSE 1 END, " + s + ") AS row_num")
 	sb.WriteString(after)
 	return sb.String()
 }
@@ -293,6 +293,7 @@ const baseSelectRecipe = `
 		   recipes.name                             AS name,
 		   recipes.description                      AS description,
 		   recipes.language                         AS language,
+		   recipes.highlighted                      AS highlighted,
 		   recipes.image                            AS image,
 		   COALESCE((SELECT GROUP_CONCAT(other_image, ';')
 					 FROM (SELECT image AS other_image
@@ -370,12 +371,13 @@ const baseSelectSearchRecipe = `
 	SELECT recipes.id                                                                      AS recipe_id,
 		   recipes.name                                                                    AS name,
 		   recipes.description                                                             AS description,
+		   recipes.highlighted                                                             AS highlighted,
 		   recipes.image                                                                   AS image,
 		   recipes.created_at                                                              AS created_at,
 		   categories.name                                                                 AS category,
 		   GROUP_CONCAT(DISTINCT keywords.name)  AS keywords,
 		   user_id,
-		   ROW_NUMBER() OVER (ORDER BY recipes.id) AS row_num
+		   ROW_NUMBER() OVER (ORDER BY CASE WHEN recipes.highlighted = 1 THEN 0 ELSE 1 END, recipes.id) AS row_num
 	FROM recipes
 			 LEFT JOIN category_recipe ON recipes.id = category_recipe.recipe_id
 			 LEFT JOIN categories ON category_recipe.category_id = categories.id
@@ -405,7 +407,7 @@ const SelectRecipesAll = baseSelectRecipe + `
 // SelectRecipes fetches a chunk of the user's recipes.
 const SelectRecipes = `
 	WITh results AS (
-		SELECT recipe_id, name, description, image, created_at, category, keywords, row_num FROM (
+		SELECT recipe_id, name, description, image, created_at, category, keywords, highlighted, row_num FROM (
 			` + baseSelectSearchRecipe + `
 			WHERE user_recipe.user_id = ?
 			GROUP BY recipes.id

@@ -834,6 +834,16 @@ func (m *mockRepository) UpdatePassword(userID int64, _ auth.HashedPassword) err
 	return nil
 }
 
+func (m *mockRepository) ToggleRecipeHighlight(recipeID, userID int64) (bool, error) {
+	recipe, err := m.Recipe(recipeID, userID)
+	if err != nil {
+		return false, err
+	}
+
+	recipe.Highlighted = !recipe.Highlighted
+	return recipe.Highlighted, nil
+}
+
 func (m *mockRepository) UpdateRecipe(updatedRecipe *models.Recipe, userID int64, recipeNum int64) error {
 	oldRecipe, err := m.Recipe(recipeNum, userID)
 	if err != nil {

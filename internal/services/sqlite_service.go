@@ -77,6 +77,10 @@ func NewSQLiteService() *SQLiteService {
 		panic(err)
 	}
 
+	if err := ensureRecipeHighlightColumn(context.Background(), db); err != nil {
+		panic(err)
+	}
+
 	return &SQLiteService{
 		DB:                 db,
 		FdcDB:              openFdcDB(),
@@ -145,6 +149,56 @@ func openFdcDB() *sql.DB {
 	}
 
 	return db
+}
+
+func ensureRecipeHighlightColumn(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, "PRAGMA table_info('recipes')")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid      int
+			name     string
+			dataType string
+			notNull  int
+			dflt     sql.NullString
+			pk       int
+		)
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == "highlighted" {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	_, err = db.ExecContext(ctx, "ALTER TABLE recipes ADD COLUMN highlighted BOOLEAN NOT NULL DEFAULT 0")
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// ToggleRecipeHighlight toggles whether a user's recipe is highlighted and returns its new state.
+func (s *SQLiteService) ToggleRecipeHighlight(recipeID, userID int64) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), shortCtxTimeout)
+	defer cancel()
+
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+
+	var highlighted bool
+	err := s.DB.QueryRowContext(ctx, statements.ToggleRecipeHighlight, recipeID, userID).Scan(&highlighted)
+	return highlighted, err
 }
 
 // AddAuthToken adds an authentication token to the database.
@@ -423,7 +477,7 @@ func (s *SQLiteService) addRecipeTx(ctx context.Context, tx *sql.Tx, r models.Re
 	}
 
 	var recipeID int64
-	err := tx.QueryRowContext(ctx, statements.InsertRecipe, r.Name, r.Description, mainImage, r.Yield, r.URL, r.Language).Scan(&recipeID)
+	err := tx.QueryRowContext(ctx, statements.InsertRecipe, r.Name, r.Description, mainImage, r.Yield, r.URL, r.Language, r.Highlighted).Scan(&recipeID)
 	if err != nil {
 		return 0, err
 	}
@@ -1826,7 +1880,7 @@ func (s *SQLiteService) SearchRecipes(opts models.SearchOptionsRecipes, userID i
 			count    int64
 			keywords sql.NullString
 		)
-		err = rows.Scan(&r.ID, &r.Name, &r.Description, &img, &r.CreatedAt, &r.Category, &keywords, &count)
+		err = rows.Scan(&r.ID, &r.Name, &r.Description, &img, &r.CreatedAt, &r.Category, &keywords, &r.Highlighted, &count)
 		if err != nil {
 			return models.Recipes{}, 0, err
 		}
@@ -1885,13 +1939,17 @@ func scanRecipe(sc scanner, isSearch bool) (*models.Recipe, error) {
 	)
 
 	if isSearch {
-		err = sc.Scan(&r.ID, &r.Name, &r.Description, &mainImage, &r.CreatedAt, &r.Category, &keywords, &count)
+		err = sc.Scan(
+			&r.ID, &r.Name, &r.Description, &mainImage, &r.CreatedAt,
+			&r.Category, &keywords, &r.Highlighted, &count,
+		)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		err = sc.Scan(
-			&r.ID, &r.Name, &r.Description, &r.Language, &mainImage, &otherImagesStr, &r.URL, &r.Yield, &r.CreatedAt, &r.UpdatedAt, &r.Category, &r.Cuisine,
+			&r.ID, &r.Name, &r.Description, &r.Language, &r.Highlighted,
+			&mainImage, &otherImagesStr, &r.URL, &r.Yield, &r.CreatedAt, &r.UpdatedAt, &r.Category, &r.Cuisine,
 			&ingredients, &instructions, &keywords, &tools, &r.Nutrition.Calories, &r.Nutrition.TotalCarbohydrates,
 			&r.Nutrition.Sugars, &r.Nutrition.Protein, &r.Nutrition.TotalFat, &r.Nutrition.SaturatedFat, &r.Nutrition.UnsaturatedFat, &transFat,
 			&r.Nutrition.Cholesterol, &r.Nutrition.Sodium, &r.Nutrition.Fiber, &isPerServing, &r.Times.Prep, &r.Times.Cook, &r.Times.Total,

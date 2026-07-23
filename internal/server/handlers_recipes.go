@@ -82,6 +82,13 @@ func newSearchbarData(opts models.SearchOptionsRecipes) templates.SearchbarData 
 	}
 }
 
+func searchPaginationParams(query url.Values, sort models.Sort) string {
+	params := url.Values{}
+	params.Set("q", query.Get("q"))
+	params.Set("sort", sort.String())
+	return params.Encode()
+}
+
 func newRecipesPagination(srv *Server, userID int64, opts models.SearchOptionsRecipes, isSwap bool) (templates.Pagination, error) {
 	counts, err := srv.Repository.Counts(userID)
 	if err != nil {
@@ -784,6 +791,51 @@ func (s *Server) recipesAddWebsiteHandler() http.HandlerFunc {
 	}
 }
 
+func (s *Server) recipeHighlightHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := getUserID(r)
+		userIDAttr := slog.Int64("userID", userID)
+
+		recipeID, err := parsePathPositiveID(r.PathValue("id"))
+		if err != nil {
+			slog.Error("Failed to parse recipe ID", userIDAttr, "error", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		isHxRequest := r.Header.Get("HX-Request") == "true"
+		compact := true
+		if isHxRequest {
+			if value := r.URL.Query().Get("compact"); value != "" {
+				compact, err = strconv.ParseBool(value)
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
+		highlighted, err := s.Repository.ToggleRecipeHighlight(recipeID, userID)
+		if err != nil {
+			msg := "Failed to update recipe highlight state."
+			slog.Error(msg, userIDAttr, "recipeID", recipeID, "error", err)
+			s.Brokers.SendToast(models.NewErrorDBToast(msg), userID)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if isHxRequest {
+			if compact {
+				w.Header().Set("HX-Refresh", "true")
+			}
+			_ = components.RecipeHighlightButton(recipeID, highlighted, compact).Render(r.Context(), w)
+			return
+		}
+
+		http.Redirect(w, r, "/recipes/"+strconv.FormatInt(recipeID, 10), http.StatusSeeOther)
+	}
+}
+
 func (s *Server) recipeDeleteHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := getUserID(r)
@@ -1410,7 +1462,7 @@ func (s *Server) recipesSearchHandler() http.HandlerFunc {
 		}
 
 		htmx := templates.PaginationHtmx{IsSwap: r.Header.Get("HX-Request") == "true", Target: "#list-recipes"}
-		params := "q=" + r.URL.Query().Get("q") + "&sort=" + opts.Sort.String()
+		params := searchPaginationParams(r.URL.Query(), opts.Sort)
 		p := templates.NewPagination(opts.Page, numPages, totalCount, templates.ResultsPerPage, "/recipes/search", params, htmx)
 		p.Search.CurrentPage = opts.Page
 

@@ -66,6 +66,7 @@ type Recipe struct {
 	CreatedAt    time.Time     `toml:"-"`
 	Cuisine      string        `toml:"-"`
 	Description  string        `toml:"-"`
+	Highlighted  bool          `toml:"-"`
 	ID           int64         `toml:"-"`
 	Images       []uuid.UUID   `toml:"-"`
 	Ingredients  []string      `toml:"-"`
@@ -143,6 +144,7 @@ func (r *Recipe) Copy() Recipe {
 		CreatedAt:    r.CreatedAt,
 		Cuisine:      r.Cuisine,
 		Description:  r.Description,
+		Highlighted:  r.Highlighted,
 		ID:           r.ID,
 		Images:       r.Images,
 		Ingredients:  ingredients,

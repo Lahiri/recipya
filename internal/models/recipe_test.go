@@ -856,6 +856,7 @@ func TestRecipe_Copy(t *testing.T) {
 		CreatedAt:   time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 		Cuisine:     "American",
 		Description: "The best American breakfast you could ever have.",
+		Highlighted: true,
 		ID:          1,
 		Images:      make([]uuid.UUID, 0),
 		Ingredients: []string{

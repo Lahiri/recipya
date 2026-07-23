@@ -169,6 +169,9 @@ type RepositoryService interface {
 	// SwitchMeasurementSystem sets the user's units system to the desired one.
 	SwitchMeasurementSystem(system units.System, userID int64) error
 
+	// ToggleRecipeHighlight toggles whether a user's recipe is highlighted and returns its new state.
+	ToggleRecipeHighlight(recipeID, userID int64) (bool, error)
+
 	// UpdateCalculateNutrition updates the user's calculate nutrition facts automatically setting.
 	UpdateCalculateNutrition(userID int64, isEnabled bool) error
 

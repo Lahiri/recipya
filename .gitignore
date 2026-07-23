@@ -12,3 +12,5 @@ static/css/tailwind.css
 web/components/*_templ.go
 web/components/*_templ.txt
 web/emails/transpiled/*.gohtml
+.github/prompts/*
+DEV_CHEATSHEET.md

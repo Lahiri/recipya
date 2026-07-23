@@ -90,6 +90,17 @@ const UpdateRecipeDescription = `
 	SET description = trim(?)
 	WHERE id = ?`
 
+// ToggleRecipeHighlight toggles a recipe's highlight state for its owner.
+const ToggleRecipeHighlight = `
+	UPDATE recipes
+	SET highlighted = NOT highlighted
+	WHERE id = ?
+	  AND EXISTS (SELECT 1
+				  FROM user_recipe
+				  WHERE recipe_id = recipes.id
+					AND user_id = ?)
+	RETURNING highlighted`
+
 // UpdateRecipeID is the query to update a recipe's ID to execute related triggers.
 const UpdateRecipeID = `
 	UPDATE recipes 
